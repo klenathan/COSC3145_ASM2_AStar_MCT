@@ -68,6 +68,7 @@ def cell_from_mouse(pos):
         return (r, c)
     return None
 
+
 def draw_grid(surface):
     """
     Draw the grid cells: background, walls, start, goal, closed set, and path.
@@ -109,8 +110,10 @@ def draw_grid(surface):
     # Finally draw start and goal on top so they are visible
     sr, sc = start
     gr, gc = goal
-    start_rect = pygame.Rect(sc * CELL_SIZE, sr * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-    goal_rect = pygame.Rect(gc * CELL_SIZE, gr * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    start_rect = pygame.Rect(sc * CELL_SIZE, sr *
+                             CELL_SIZE, CELL_SIZE, CELL_SIZE)
+    goal_rect = pygame.Rect(gc * CELL_SIZE, gr *
+                            CELL_SIZE, CELL_SIZE, CELL_SIZE)
     pygame.draw.rect(surface, COLOR_START, start_rect)
     pygame.draw.rect(surface, COLOR_GOAL, goal_rect)
 
@@ -136,6 +139,7 @@ def heuristic(a, b):
     (r2, c2) = b
     return abs(r1 - r2) + abs(c1 - c2)
 
+
 def get_neighbors(cell):
     """
     Return the valid neighbor cells for a given cell.
@@ -159,6 +163,7 @@ def get_neighbors(cell):
 
     return neighbors
 
+
 def reconstruct_path(came_from, current):
     """
     Rebuild the path from start to goal using the parent pointers in came_from.
@@ -170,6 +175,7 @@ def reconstruct_path(came_from, current):
         path.append(current)
     path.reverse()
     return path
+
 
 def run_astar():
     """
@@ -308,6 +314,7 @@ def main():
     pygame.quit()
     sys.exit(0)
 
+
 def reset_search():
     """
     Reset path and closed set when the map changes (start, goal, or walls changed).
@@ -316,6 +323,7 @@ def reset_search():
     global current_path, current_closed
     current_path = None
     current_closed = set()
+
 
 if __name__ == "__main__":
     main()
