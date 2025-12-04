@@ -5,6 +5,7 @@ A* pathfinding algorithm implementation.
 import math
 import heapq
 from astar_game.grid import get_neighbors
+from astar_game.config import TERRAIN_COSTS, TERRAIN_WALL, TERRAIN_GRASS
 
 
 def heuristic(a, b):
@@ -45,22 +46,24 @@ def reconstruct_path(came_from, current):
     return path
 
 
-def run_astar(start, goal, walls):
+def run_astar(start, goal, terrain):
     """
-    Execute the A* algorithm on the current grid.
+    Execute the A* algorithm on the current grid with terrain costs.
     
     Args:
         start: Tuple of (row, col) representing the start cell
         goal: Tuple of (row, col) representing the goal cell
-        walls: Set of (row, col) tuples representing wall cells
+        terrain: Dictionary mapping (row, col) -> terrain_type
         
     Returns:
         Tuple of (path, closed_set) where:
         - path: List of (row, col) tuples from start to goal, or None if no path exists
         - closed_set: Set of (row, col) tuples representing visited cells
     """
-    # If start or goal is on a wall, we cannot find a path
-    if start in walls or goal in walls:
+    # If start or goal is a wall, we cannot find a path
+    if start in terrain and terrain[start] == TERRAIN_WALL:
+        return None, set()
+    if goal in terrain and terrain[goal] == TERRAIN_WALL:
         return None, set()
 
     # Priority queue (min heap) of (f_score, cell)
@@ -92,19 +95,29 @@ def run_astar(start, goal, walls):
         closed_set.add(current)
 
         # Check all neighbors
-        for neighbor in get_neighbors(current, walls):
+        for neighbor in get_neighbors(current, terrain):
             # Skip if we already visited this cell
             if neighbor in closed_set:
                 continue
 
-            # Calculate cost based on whether move is diagonal
+            # Get terrain type for neighbor cell
+            neighbor_terrain = terrain.get(neighbor, TERRAIN_GRASS)
+            
+            # Skip if neighbor is a wall (shouldn't happen due to get_neighbors, but safety check)
+            if neighbor_terrain == TERRAIN_WALL:
+                continue
+            
+            # Get terrain cost multiplier
+            terrain_cost = TERRAIN_COSTS.get(neighbor_terrain, 1.0)
+
+            # Calculate base movement cost based on whether move is diagonal
             dr = neighbor[0] - current[0]
             dc = neighbor[1] - current[1]
             is_diagonal = abs(dr) == 1 and abs(dc) == 1
-            move_cost = math.sqrt(2) if is_diagonal else 1.0
+            base_move_cost = math.sqrt(2) if is_diagonal else 1.0
 
-            # Cost from start to this neighbor through current
-            tentative_g = g_score[current] + move_cost
+            # Cost from start to this neighbor through current (multiply by terrain cost)
+            tentative_g = g_score[current] + base_move_cost * terrain_cost
 
             # If neighbor is new or we found a better path
             if neighbor not in g_score or tentative_g < g_score[neighbor]:

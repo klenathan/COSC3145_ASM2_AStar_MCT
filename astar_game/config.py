@@ -2,9 +2,9 @@
 Configuration constants for the A* pathfinding game.
 """
 
-# Grid dimensions
-ROWS = 20
-COLS = 30
+# Grid dimensions (increased for better terrain visualization)
+ROWS = 40
+COLS = 60
 
 # Cell size in pixels
 CELL_SIZE = 25
@@ -23,11 +23,54 @@ COLOR_PATH = (0, 255, 0)  # Green path color
 COLOR_CLOSED = (120, 0, 120)
 COLOR_TEXT = (230, 230, 230)
 
-# Default start and goal positions
-DEFAULT_START = (5, 5)
-DEFAULT_GOAL = (10, 20)
+# Default start and goal positions (proportional to new grid size)
+DEFAULT_START = (10, 10)
+DEFAULT_GOAL = (30, 50)
 
-# Random wall generation
+# Terrain type constants
+TERRAIN_GRASS = "grass"
+TERRAIN_WATER = "water"
+TERRAIN_MUD = "mud"
+TERRAIN_WALL = "wall"
+
+# Terrain movement costs
+COST_GRASS = 1.0
+COST_WATER = 2.0
+COST_MUD = 3.0
+COST_WALL = float('inf')
+
+# Terrain color definitions (RGB)
+COLOR_GRASS = (50, 150, 50)      # Green for grass
+COLOR_WATER = (50, 100, 200)     # Blue for water
+COLOR_MUD = (139, 90, 43)        # Brown for mud
+# COLOR_WALL already defined above
+
+# Terrain cost mapping
+TERRAIN_COSTS = {
+    TERRAIN_GRASS: COST_GRASS,
+    TERRAIN_WATER: COST_WATER,
+    TERRAIN_MUD: COST_MUD,
+    TERRAIN_WALL: COST_WALL,
+}
+
+# Terrain generation density (percentage of grid cells for each terrain type)
+# These should sum to <= 1.0, remaining cells will be grass
+TERRAIN_WATER_DENSITY = 0.15  # 15% water
+TERRAIN_MUD_DENSITY = 0.10    # 10% mud
+TERRAIN_WALL_DENSITY = 0.20   # 20% walls
+# Remaining ~55% will be grass
+
+# Clustering parameters for realistic terrain generation
+# Number of seed points to place for each terrain type (more seeds = more clusters)
+CLUSTER_WATER_SEEDS = 8   # Number of water cluster seeds
+CLUSTER_MUD_SEEDS = 6     # Number of mud cluster seeds
+CLUSTER_WALL_SEEDS = 10   # Number of wall cluster seeds
+# Maximum cluster growth radius (in cells) - controls how large clusters can grow
+CLUSTER_MAX_RADIUS = 5    # Maximum distance from seed to grow cluster
+# Probability of growing to a neighboring cell (0.0 to 1.0)
+CLUSTER_GROWTH_PROBABILITY = 0.6  # 60% chance to expand to each neighbor
+
+# Legacy: Random wall generation (kept for backward compatibility)
 WALL_DENSITY = 0.4  # Percentage of grid cells that become walls (0.0 to 1.0)
 
 # A* pathfinding settings

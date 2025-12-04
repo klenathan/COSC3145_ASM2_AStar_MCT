@@ -471,4 +471,3 @@ def get_mcts_win_rates(state, n_iter=400):
                     player2_rates[child.move] = 50.0
 
     return player1_rates, player2_rates, (overall_p1, overall_p2)
-
