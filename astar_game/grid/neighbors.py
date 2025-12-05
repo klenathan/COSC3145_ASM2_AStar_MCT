@@ -2,19 +2,20 @@
 Neighbor cell utilities for finding valid adjacent cells in the grid.
 """
 
-from astar_game.config import ROWS, COLS, ALLOW_DIAGONAL_NEIGHBORS, TERRAIN_WALL, TERRAIN_GRASS
+from astar_game.config import ROWS, COLS, TERRAIN_WALL, TERRAIN_GRASS
 
 
-def get_neighbors(cell, terrain):
+def get_neighbors(cell, terrain, allow_diagonal_neighbors=False):
     """
     Return the valid neighbor cells for a given cell.
     Movement can be in 8 directions (4 cardinal + 4 diagonal) or 4 directions (cardinal only),
-    depending on the ALLOW_DIAGONAL_NEIGHBORS config setting.
+    depending on the allow_diagonal_neighbors parameter.
     Skip cells that are outside the grid or are walls (impassable).
 
     Args:
         cell: Tuple of (row, col) representing the current cell
         terrain: Dictionary mapping (row, col) -> terrain_type
+        allow_diagonal_neighbors: Boolean flag to enable/disable diagonal movement
 
     Returns:
         List of (row, col) tuples representing valid neighbor cells
@@ -27,14 +28,14 @@ def get_neighbors(cell, terrain):
         (-1, 0), (1, 0), (0, -1), (0, 1)  # Up, Down, Left, Right
     ]
 
-    # Diagonal directions (only if allowed by config)
+    # Diagonal directions (only if allowed by parameter)
     diagonal_directions = [
         # Top-left, Top-right, Bottom-left, Bottom-right
         (-1, -1), (-1, 1), (1, -1), (1, 1)
     ]
 
-    # Combine directions based on config
-    if ALLOW_DIAGONAL_NEIGHBORS:
+    # Combine directions based on parameter
+    if allow_diagonal_neighbors:
         directions = cardinal_directions + diagonal_directions
     else:
         directions = cardinal_directions

@@ -46,7 +46,7 @@ def reconstruct_path(came_from, current):
     return path
 
 
-def run_astar(start, goal, terrain):
+def run_astar(start, goal, terrain, allow_diagonal_neighbors=False):
     """
     Execute the A* algorithm on the current grid with terrain costs.
     
@@ -54,6 +54,7 @@ def run_astar(start, goal, terrain):
         start: Tuple of (row, col) representing the start cell
         goal: Tuple of (row, col) representing the goal cell
         terrain: Dictionary mapping (row, col) -> terrain_type
+        allow_diagonal_neighbors: Boolean flag to enable/disable diagonal movement
         
     Returns:
         Tuple of (path, closed_set) where:
@@ -95,7 +96,7 @@ def run_astar(start, goal, terrain):
         closed_set.add(current)
 
         # Check all neighbors
-        for neighbor in get_neighbors(current, terrain):
+        for neighbor in get_neighbors(current, terrain, allow_diagonal_neighbors):
             # Skip if we already visited this cell
             if neighbor in closed_set:
                 continue

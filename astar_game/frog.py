@@ -29,7 +29,8 @@ class Frog:
         self.speed = speed  # Dynamic speed that can be adjusted
 
         # Path following state
-        self.path: list[V2] = []  # List of waypoints in pixel coordinates
+        # List of waypoints in cell coordinates (row, col)
+        self.path: list[tuple] = []
 
     def set_path(self, path_cells):
         """
@@ -42,12 +43,8 @@ class Frog:
             self.path = []
             return
 
-        # Convert grid cells to pixel waypoints (center of each cell)
-        self.path = []
-        for cell in path_cells:
-            x, y = cell_to_pixel_center(cell)
-            waypoint = V2(x, y)
-            self.path.append(waypoint)
+        # Store cell coordinates directly
+        self.path = list(path_cells)
 
     def update(self, dt):
         """
@@ -64,7 +61,10 @@ class Frog:
             return
 
         # Check if we've reached the end of the path
-        distance_to_end = (self.path[-1] - self.pos).length()
+        # Convert last cell to pixel center for distance calculation
+        end_cell = self.path[-1]
+        end_pixel = V2(*cell_to_pixel_center(end_cell))
+        distance_to_end = (end_pixel - self.pos).length()
         # if distance_to_end < ARRIVE_STOP_RADIUS:
         #     # Reached the end, stop
         #     self.vel = integrate_velocity(
@@ -72,6 +72,7 @@ class Frog:
         #     return
 
         # Use path following behavior to follow the path smoothly
+        # Pass cell coordinates to follow_path
         steering_force = follow_path(
             self.pos, self.vel, self.path, PATH_LOOKAHEAD, self.speed)
 

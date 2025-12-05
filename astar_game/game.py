@@ -19,12 +19,14 @@ from astar_game.config import (
     TERRAIN_WALL,
     ROWS,
     COLS,
+    ALLOW_DIAGONAL_NEIGHBORS,
 )
 from astar_game.grid import cell_from_mouse, generate_random_terrain, generate_clustered_terrain
 from astar_game.astar import run_astar
 from astar_game.renderer import draw_grid, draw_help_text
 from astar_game.frog import Frog
 from astar_game.slider import Slider
+from astar_game.toggle_button import ToggleButton
 from astar_game.config import FROG_SPEED
 
 
@@ -52,6 +54,12 @@ class Game:
         # Terrain placement state
         self.current_terrain = TERRAIN_GRASS  # Default to grass
         self.use_clustered = True  # Toggle between clustered and random generation
+        
+        # Debug mode
+        self.debug_mode = False  # Toggle with 'D' key
+        
+        # Pathfinding settings (OOP style - instance variable instead of modifying config)
+        self.allow_diagonal_neighbors = ALLOW_DIAGONAL_NEIGHBORS
 
         # Create frog entity at start position
         self.frog = Frog(DEFAULT_START)
@@ -66,6 +74,15 @@ class Game:
             max_value=800.0,
             initial_value=FROG_SPEED,
             label="Frog Speed"
+        )
+
+        # Create diagonal movement toggle button
+        toggle_x = slider_x + slider_width + 30
+        toggle_y = slider_y
+        self.diagonal_toggle = ToggleButton(
+            toggle_x, toggle_y, 50, 24,
+            initial_state=ALLOW_DIAGONAL_NEIGHBORS,
+            label="Diagonal Movement"
         )
 
         self.running = True
@@ -88,6 +105,9 @@ class Game:
                 # Escape closes the window
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                # D key toggles debug mode
+                elif event.key == pygame.K_d:
+                    self.debug_mode = not self.debug_mode
                 # Number keys select terrain type
                 elif event.key == pygame.K_1:
                     self.current_terrain = TERRAIN_GRASS
@@ -103,7 +123,7 @@ class Game:
                     frog_cell = self.frog.get_cell()
                     # Run A* from frog's position to goal
                     self.current_path, self.current_closed = run_astar(
-                        frog_cell, self.goal, self.terrain
+                        frog_cell, self.goal, self.terrain, self.allow_diagonal_neighbors
                     )
                     # Set the path on the frog so it moves along the calculated path
                     if self.current_path is not None:
@@ -126,6 +146,14 @@ class Game:
                     # Slider handled the event, update frog speed
                     self.frog.set_speed(self.speed_slider.value)
                     continue
+                
+                # Check if diagonal toggle was clicked
+                if self.diagonal_toggle.handle_event(event):
+                    # Update the instance variable (OOP style)
+                    self.allow_diagonal_neighbors = self.diagonal_toggle.state
+                    # Reset search so user can see the effect
+                    self.reset_search()
+                    continue
 
                 cell = cell_from_mouse(pygame.mouse.get_pos())
                 if cell is not None:
@@ -144,7 +172,7 @@ class Game:
 
                         # Run A* from frog's position to target
                         path, closed_set = run_astar(
-                            frog_cell, target_cell, self.terrain)
+                            frog_cell, target_cell, self.terrain, self.allow_diagonal_neighbors)
 
                         if path is not None:
                             # Set the path on the frog
@@ -202,8 +230,42 @@ class Game:
 
         # Draw speed slider
         self.speed_slider.draw(self.screen, self.font)
+        
+        # Draw diagonal movement toggle
+        self.diagonal_toggle.draw(self.screen, self.font)
 
-        draw_help_text(self.screen, self.font, self.current_terrain)
+        draw_help_text(self.screen, self.font, self.current_terrain, self.debug_mode)
+        
+        # Draw debug info if enabled
+        if self.debug_mode:
+            try:
+                from astar_game.renderer import draw_debug_info, draw_debug_visuals
+                # Draw visual debug overlays on the grid
+                draw_debug_visuals(
+                    self.screen,
+                    self.frog,
+                    self.current_path,
+                    self.start,
+                    self.goal
+                )
+                # Draw debug info panels
+                draw_debug_info(
+                    self.screen,
+                    self.font,
+                    self.frog,
+                    self.terrain,
+                    self.current_path,
+                    self.current_closed,
+                    self.start,
+                    self.goal,
+                    self.clock.get_fps()
+                )
+            except Exception as e:
+                # If debug rendering fails, show error message but don't crash
+                error_text = f"Debug Error: {str(e)}"
+                error_surface = self.font.render(error_text, True, (255, 100, 100))
+                self.screen.blit(error_surface, (10, 50))
+        
         pygame.display.flip()
 
     def run(self):

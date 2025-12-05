@@ -20,6 +20,7 @@ from astar_game.config import (ARRIVE_BRAKE_BOOST, ARRIVE_SLOW_RADIUS,
                                AVOID_MAX_ANGLE, FPS, PATH_LOOKAHEAD)
 from astar_game.utils import (circlecast_hits_any_rect, limit,
                               segment_circlecast_hits_rect)
+from astar_game.grid.coordinates import cell_to_pixel_center
 
 # ---------------- Base behaviours ----------------
 
@@ -29,7 +30,19 @@ def seek(pos, vel, target, max_speed):
     Move toward a target. Returns a steering force.
     desired = direction_to_target * max_speed
     steering = desired - current_velocity
+
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        vel: Current velocity (V2)
+        target: Target as (row, col) tuple (cell coordinate) or V2 (pixel coordinate)
+        max_speed: Maximum speed
     """
+    # Convert cell coordinate to pixel center if target is a tuple
+    if isinstance(target, tuple):
+        target = V2(*cell_to_pixel_center(target))
+    elif not isinstance(target, V2):
+        target = V2(target)
+
     d = target - pos
     if d.length_squared() == 0:
         return V2()
@@ -41,7 +54,19 @@ def flee(pos, vel, target, max_speed):
     """
     Move away from a target. This is the opposite of seek.
     You need to implement the mirror of seek using direction from threat to self.
+
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        vel: Current velocity (V2)
+        target: Target as (row, col) tuple (cell coordinate) or V2 (pixel coordinate)
+        max_speed: Maximum speed
     """
+    # Convert cell coordinate to pixel center if target is a tuple
+    if isinstance(target, tuple):
+        target = V2(*cell_to_pixel_center(target))
+    elif not isinstance(target, V2):
+        target = V2(target)
+
     d = pos - target
     if d.length_squared() == 0:
         return V2()
@@ -52,7 +77,7 @@ def flee(pos, vel, target, max_speed):
 def arrive(
     pos: V2,
     vel: V2,
-    target: V2,
+    target,
     max_speed: float,
     slow_radius=ARRIVE_SLOW_RADIUS,
     stop_radius=ARRIVE_STOP_RADIUS,
@@ -66,7 +91,21 @@ def arrive(
     Inside slow radius, adds a lateral snap force to pivot toward the new target
     and boosts braking when re-targeting nearby to prevent overshoot.
     Frame-rate independent: uses steering forces that work with dt in integrate_velocity.
+
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        vel: Current velocity (V2)
+        target: Target as (row, col) tuple (cell coordinate) or V2 (pixel coordinate)
+        max_speed: Maximum speed
+        slow_radius: Radius at which to start slowing down
+        stop_radius: Radius at which to stop
     """
+    # Convert cell coordinate to pixel center if target is a tuple
+    if isinstance(target, tuple):
+        target = V2(*cell_to_pixel_center(target))
+    elif not isinstance(target, V2):
+        target = V2(target)
+
     to_target = target - pos
     distance = to_target.length()
     desired_vel = V2()
@@ -116,9 +155,88 @@ def integrate_velocity(vel, force, dt, max_speed):
     return vel
 
 
-def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_speed=200.0, predict=True):
+def _find_lookahead_on_path(pos: V2, path: list[tuple], lookahead=PATH_LOOKAHEAD):
+    """
+    Helper function to find the lookahead point on a path.
+    
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        path: List of (row, col) tuples representing the path in cell coordinates
+        lookahead: Distance to look ahead along the path
+        
+    Returns:
+        V2 representing the lookahead point, or None if path is too short
+    """
+    if not path or len(path) < 2:
+        return None
+    
+    # Convert path cells to pixel centers
+    path_pixels = [V2(*cell_to_pixel_center(cell)) for cell in path]
+    
+    # Find closest point on path
+    closest_point = None
+    closest_dist_sq = float('inf')
+    closest_segment_idx = 0
+    
+    for i in range(len(path_pixels) - 1):
+        segment_start = path_pixels[i]
+        segment_end = path_pixels[i + 1]
+        segment_vec = segment_end - segment_start
+        len_sq = segment_vec.length_squared()
+        
+        if len_sq < 0.001:
+            point = segment_start
+        else:
+            t = (pos - segment_start).dot(segment_vec) / len_sq
+            t = max(0.0, min(1.0, t))
+            point = segment_start + segment_vec * t
+        
+        dist_sq = (pos - point).length_squared()
+        if dist_sq < closest_dist_sq:
+            closest_dist_sq = dist_sq
+            closest_point = point
+            closest_segment_idx = i
+    
+    # Calculate lookahead from closest point
+    lookahead_point = None
+    remaining_lookahead = lookahead
+    
+    for i in range(closest_segment_idx, len(path_pixels) - 1):
+        segment_start = path_pixels[i] if i != closest_segment_idx else closest_point
+        segment_end = path_pixels[i + 1]
+        segment_vec = segment_end - segment_start
+        dist = segment_vec.length()
+        
+        if remaining_lookahead <= dist:
+            lookahead_point = segment_start + segment_vec.normalize() * remaining_lookahead
+            break
+        remaining_lookahead -= dist
+    
+    # If we ran off the end, target the very last point
+    if lookahead_point is None:
+        lookahead_point = path_pixels[-1]
+    
+    return lookahead_point
+
+
+
+def follow_path(pos: V2, vel: V2, path: list[tuple], lookahead=PATH_LOOKAHEAD, max_speed=200.0, predict=True):
+    """
+    Follow a path defined by cell coordinates.
+
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        vel: Current velocity (V2)
+        path: List of (row, col) tuples representing the path in cell coordinates
+        lookahead: Distance to look ahead along the path
+        max_speed: Maximum speed
+        predict: Whether to use prediction for smoother following
+    """
     if not path or len(path) < 2:
         return V2()
+
+    # Convert path cells to pixel centers for calculations
+    path_pixels = [V2(*cell_to_pixel_center(cell)) for cell in path]
 
     current_speed = vel.length()
     prediction_dist = current_speed * 0.5  # Look 0.1 seconds ahead
@@ -130,9 +248,9 @@ def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_
     closest_dist_sq = float('inf')
     closest_segment_idx = 0
 
-    for i in range(len(path) - 1):
-        segment_start = path[i]
-        segment_end = path[i + 1]
+    for i in range(len(path_pixels) - 1):
+        segment_start = path_pixels[i]
+        segment_end = path_pixels[i + 1]
         segment_vec = segment_end - segment_start
         len_sq = segment_vec.length_squared()
 
@@ -154,9 +272,9 @@ def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_
     lookahead_point = None
     remaining_lookahead = lookahead
 
-    for i in range(closest_segment_idx, len(path) - 1):
-        segment_start = path[i] if i != closest_segment_idx else closest_point
-        segment_end = path[i + 1]
+    for i in range(closest_segment_idx, len(path_pixels) - 1):
+        segment_start = path_pixels[i] if i != closest_segment_idx else closest_point
+        segment_end = path_pixels[i + 1]
         segment_vec = segment_end - segment_start
         dist = segment_vec.length()
 
@@ -170,7 +288,7 @@ def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_
     # If we ran off the end, target the very last point
     is_at_end = False
     if lookahead_point is None:
-        lookahead_point = path[-1]
+        lookahead_point = path_pixels[-1]
         is_at_end = True
 
     to_target = lookahead_point - pos
@@ -191,13 +309,7 @@ def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_
     else:
         return arrive(pos, vel, lookahead_point, target_speed)
 
-# Helper for standard seek (if you don't have one)
-
-
-def seek(pos, vel, target, max_speed):
-    desired = (target - pos).normalize() * max_speed
-    steering = desired - vel
-    return steering  # usually you clamp this steering force
+# Note: seek() is already defined above, this duplicate definition is removed
 # ---------------- Obstacle avoidance blend ----------------
 
 
@@ -216,7 +328,23 @@ def seek_with_avoid(pos, vel, target, max_speed, radius, rects: list[Rect], look
       - tested_angles: list of tuples (angle_deg, direction, endpoint, is_free)
       - selected_direction: V2 or None, the chosen free direction
       - lookahead: float, the lookahead distance used
+
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        vel: Current velocity (V2)
+        target: Target as (row, col) tuple (cell coordinate) or V2 (pixel coordinate)
+        max_speed: Maximum speed
+        radius: Radius for obstacle avoidance
+        rects: List of obstacle rectangles
+        lookahead: Lookahead distance
+        debug_info: Optional dict to populate with debug information
     """
+    # Convert cell coordinate to pixel center if target is a tuple
+    if isinstance(target, tuple):
+        target = V2(*cell_to_pixel_center(target))
+    elif not isinstance(target, V2):
+        target = V2(target)
+
     circlecast_hits_any_rect_step = 8.0
     # Calculate base direction to target
     to_target = target - pos

@@ -3,11 +3,11 @@ Configuration constants for the A* pathfinding game.
 """
 
 # Grid dimensions (increased for better terrain visualization)
-ROWS = 40
-COLS = 60
+ROWS = 50
+COLS = 80
 
 # Cell size in pixels
-CELL_SIZE = 25
+CELL_SIZE = 15
 
 # Window dimensions (computed from grid size)
 WINDOW_WIDTH = COLS * CELL_SIZE
@@ -35,8 +35,8 @@ TERRAIN_WALL = "wall"
 
 # Terrain movement costs
 COST_GRASS = 1.0
-COST_WATER = 2.0
-COST_MUD = 3.0
+COST_WATER = 3.0
+COST_MUD = 5.0
 COST_WALL = float('inf')
 
 # Terrain color definitions (RGB)
@@ -57,7 +57,7 @@ TERRAIN_COSTS = {
 # These should sum to <= 1.0, remaining cells will be grass
 TERRAIN_WATER_DENSITY = 0.15  # 15% water
 TERRAIN_MUD_DENSITY = 0.10    # 10% mud
-TERRAIN_WALL_DENSITY = 0.20   # 20% walls
+TERRAIN_WALL_DENSITY = 0.30   # 20% walls
 # Remaining ~55% will be grass
 
 # Clustering parameters for realistic terrain generation
