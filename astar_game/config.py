@@ -15,7 +15,7 @@ WINDOW_HEIGHT = ROWS * CELL_SIZE
 
 # Color definitions (RGB)
 COLOR_BG = (30, 30, 40)
-COLOR_GRID = (60, 60, 70)
+COLOR_GRID = (80, 80, 90)
 COLOR_WALL = (40, 40, 120)
 COLOR_START = (0, 200, 0)
 COLOR_GOAL = (200, 0, 0)
@@ -75,7 +75,7 @@ WALL_DENSITY = 0.4  # Percentage of grid cells that become walls (0.0 to 1.0)
 
 # A* pathfinding settings
 # If False, only allow movement in 4 cardinal directions
-ALLOW_DIAGONAL_NEIGHBORS = False
+ALLOW_DIAGONAL_NEIGHBORS = True
 
 # FPS for the game loop
 FPS = 60

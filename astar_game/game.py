@@ -53,7 +53,7 @@ class Game:
         
         # Terrain placement state
         self.current_terrain = TERRAIN_GRASS  # Default to grass
-        self.use_clustered = True  # Toggle between clustered and random generation
+        self.mouse_held = False  # Track if left mouse button is held down
         
         # Debug mode
         self.debug_mode = False  # Toggle with 'D' key
@@ -128,14 +128,10 @@ class Game:
                     # Set the path on the frog so it moves along the calculated path
                     if self.current_path is not None:
                         self.frog.set_path(self.current_path)
-                # G key toggles between clustered and random terrain generation
-                elif event.key == pygame.K_g:
-                    self.use_clustered = not self.use_clustered
-                    # Regenerate terrain with the selected method
-                    if self.use_clustered:
-                        self.terrain = generate_clustered_terrain(self.start, self.goal)
-                    else:
-                        self.terrain = generate_random_terrain(self.start, self.goal)
+                # R key regenerates terrain using clustered generation
+                elif event.key == pygame.K_r:
+                    # Regenerate terrain with clustered method
+                    self.terrain = generate_clustered_terrain(self.start, self.goal)
                     self.reset_search()
                     # Reset frog to start position
                     self.frog = Frog(DEFAULT_START)
@@ -164,6 +160,8 @@ class Game:
                             self.terrain[cell] = self.current_terrain
                             # Clear previous A* result, as the map changed
                             self.reset_search()
+                            # Enable continuous placement
+                            self.mouse_held = True
                     # Right click sets target and runs A* pathfinding for frog
                     elif event.button == 3:
                         # Get frog's current grid cell
@@ -192,6 +190,9 @@ class Game:
             elif event.type == pygame.MOUSEBUTTONUP:
                 # Handle slider release
                 self.speed_slider.handle_event(event)
+                # Stop continuous terrain placement on left button release
+                if event.button == 1:
+                    self.mouse_held = False
 
             elif event.type == pygame.MOUSEMOTION:
                 # Handle slider dragging
@@ -210,6 +211,19 @@ class Game:
             mouse_pos = pygame.mouse.get_pos()
             self.speed_slider.update(mouse_pos)
             self.frog.set_speed(self.speed_slider.value)
+
+        # Handle continuous terrain placement while mouse is held
+        if self.mouse_held:
+            mouse_pos = pygame.mouse.get_pos()
+            cell = cell_from_mouse(mouse_pos)
+            if cell is not None:
+                # Don't allow placing terrain on start or goal
+                if cell != self.start and cell != self.goal:
+                    # Only update if the terrain is different (avoid redundant resets)
+                    if self.terrain[cell] != self.current_terrain:
+                        self.terrain[cell] = self.current_terrain
+                        # Clear previous A* result, as the map changed
+                        self.reset_search()
 
         # Update frog
         self.frog.update(dt)
