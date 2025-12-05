@@ -135,8 +135,23 @@ def generate_random_walls(wall_density, start, goal, max_attempts=10):
         # Randomly sample cells to become walls
         walls = set(random.sample(valid_wall_cells, num_walls))
 
+        # Convert walls set to terrain dictionary for run_astar
+        # Initialize all cells as grass
+        terrain = {}
+        for r in range(ROWS):
+            for c in range(COLS):
+                terrain[(r, c)] = TERRAIN_GRASS
+
+        # Mark wall cells as TERRAIN_WALL
+        for wall_cell in walls:
+            terrain[wall_cell] = TERRAIN_WALL
+
+        # Ensure start and goal remain grass
+        terrain[start] = TERRAIN_GRASS
+        terrain[goal] = TERRAIN_GRASS
+
         # Verify a path exists using A* algorithm
-        path, _ = run_astar(start, goal, walls)
+        path, _ = run_astar(start, goal, terrain)
 
         if path is not None:
             # Valid configuration found

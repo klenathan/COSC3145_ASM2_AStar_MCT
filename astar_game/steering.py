@@ -116,15 +116,12 @@ def integrate_velocity(vel, force, dt, max_speed):
     return vel
 
 
-def follow_path(pos, vel, path, lookahead=PATH_LOOKAHEAD, max_speed=200.0, predict=True):
+def follow_path(pos: V2, vel: V2, path: list[V2], lookahead=PATH_LOOKAHEAD, max_speed=200.0, predict=True):
     if not path or len(path) < 2:
         return V2()
 
-    # 1. PREDICTION (Optional)
-    # Project our future position to find the path point.
-    # This creates smoother merging if we are currently off-path.
     current_speed = vel.length()
-    prediction_dist = current_speed * 0.1  # Look 0.1 seconds ahead
+    prediction_dist = current_speed * 0.5  # Look 0.1 seconds ahead
     predict_pos = pos + vel.normalize() * \
         prediction_dist if predict and current_speed > 0 else pos
 
@@ -165,6 +162,8 @@ def follow_path(pos, vel, path, lookahead=PATH_LOOKAHEAD, max_speed=200.0, predi
 
         if remaining_lookahead <= dist:
             lookahead_point = segment_start + segment_vec.normalize() * remaining_lookahead
+            # Center the lookahead point to the middle of the cell
+            lookahead_point = (segment_start + segment_end) * 0.5
             break
         remaining_lookahead -= dist
 
@@ -190,7 +189,7 @@ def follow_path(pos, vel, path, lookahead=PATH_LOOKAHEAD, max_speed=200.0, predi
     if is_at_end:
         return arrive(pos, vel, lookahead_point, target_speed)
     else:
-        return seek(pos, vel, lookahead_point, target_speed)
+        return arrive(pos, vel, lookahead_point, target_speed)
 
 # Helper for standard seek (if you don't have one)
 
