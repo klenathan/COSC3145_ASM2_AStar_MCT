@@ -10,3 +10,4 @@ from astar_game.game import Game
 
 __all__ = ["Game"]
 
+

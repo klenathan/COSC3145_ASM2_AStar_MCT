@@ -59,3 +59,4 @@ MINIMALIST = Theme(
 # List of all available themes
 ALL_THEMES = [CLASSIC, NEON, MINIMALIST]
 
+

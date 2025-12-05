@@ -116,98 +116,89 @@ def integrate_velocity(vel, force, dt, max_speed):
     return vel
 
 
-def follow_path(pos, vel, path, lookahead=PATH_LOOKAHEAD, max_speed=200.0):
-    """
-    Path following behavior: projects position onto path and steers toward a lookahead point.
-
-    Args:
-        pos: Current position (V2)
-        vel: Current velocity (V2)
-        path: List of waypoints (V2) representing the path
-        lookahead: Distance to look ahead along the path
-        max_speed: Maximum speed for steering
-
-    Returns:
-        Steering force (V2) to follow the path
-    """
+def follow_path(pos, vel, path, lookahead=PATH_LOOKAHEAD, max_speed=200.0, predict=True):
     if not path or len(path) < 2:
         return V2()
 
-    # Find the closest point on the path
+    # 1. PREDICTION (Optional)
+    # Project our future position to find the path point.
+    # This creates smoother merging if we are currently off-path.
+    current_speed = vel.length()
+    prediction_dist = current_speed * 0.1  # Look 0.1 seconds ahead
+    predict_pos = pos + vel.normalize() * \
+        prediction_dist if predict and current_speed > 0 else pos
+
+    # 2. FIND CLOSEST POINT (O(N) - Consider caching index in class state)
     closest_point = None
     closest_dist_sq = float('inf')
     closest_segment_idx = 0
 
-    # Check each segment of the path
     for i in range(len(path) - 1):
         segment_start = path[i]
         segment_end = path[i + 1]
-
-        # Project position onto this segment
         segment_vec = segment_end - segment_start
-        segment_len_sq = segment_vec.length_squared()
+        len_sq = segment_vec.length_squared()
 
-        if segment_len_sq < 0.001:
-            # Degenerate segment, use endpoint
-            dist_sq = (pos - segment_start).length_squared()
-            if dist_sq < closest_dist_sq:
-                closest_dist_sq = dist_sq
-                closest_point = segment_start
-                closest_segment_idx = i
+        if len_sq < 0.001:
+            point = segment_start
         else:
-            # Project onto segment
-            t = (pos - segment_start).dot(segment_vec) / segment_len_sq
-            t = max(0.0, min(1.0, t))  # Clamp to segment
+            # Project predict_pos, not raw pos
+            t = (predict_pos - segment_start).dot(segment_vec) / len_sq
+            t = max(0.0, min(1.0, t))
+            point = segment_start + segment_vec * t
 
-            point_on_segment = segment_start + segment_vec * t
-            dist_sq = (pos - point_on_segment).length_squared()
+        dist_sq = (predict_pos - point).length_squared()
+        if dist_sq < closest_dist_sq:
+            closest_dist_sq = dist_sq
+            closest_point = point
+            closest_segment_idx = i
 
-            if dist_sq < closest_dist_sq:
-                closest_dist_sq = dist_sq
-                closest_point = point_on_segment
-                closest_segment_idx = i
-
-    if closest_point is None:
-        return V2()
-
-    # Find the lookahead point along the path
+    # 3. CALCULATE LOOKAHEAD
     lookahead_point = None
     remaining_lookahead = lookahead
 
-    # Start from the closest segment and move forward
     for i in range(closest_segment_idx, len(path) - 1):
-        segment_start = path[i]
+        segment_start = path[i] if i != closest_segment_idx else closest_point
         segment_end = path[i + 1]
         segment_vec = segment_end - segment_start
-        segment_len = segment_vec.length()
+        dist = segment_vec.length()
 
-        if segment_len < 0.001:
-            continue
-
-        # Calculate how far along this segment we should go
-        if i == closest_segment_idx:
-            # Start from the closest point on this segment
-            segment_start = closest_point
-
-        segment_vec = segment_end - segment_start
-        segment_len = segment_vec.length()
-
-        if remaining_lookahead <= segment_len:
-            # Lookahead point is on this segment
-            t = remaining_lookahead / segment_len
-            lookahead_point = segment_start + segment_vec * t
+        if remaining_lookahead <= dist:
+            lookahead_point = segment_start + segment_vec.normalize() * remaining_lookahead
             break
-        else:
-            # Move past this segment
-            remaining_lookahead -= segment_len
+        remaining_lookahead -= dist
 
-    # If we didn't find a lookahead point (reached end of path), use the last waypoint
+    # If we ran off the end, target the very last point
+    is_at_end = False
     if lookahead_point is None:
         lookahead_point = path[-1]
+        is_at_end = True
 
-    # Use arrive to move toward the lookahead point, slowing down when close
-    return arrive(pos, vel, lookahead_point, max_speed)
+    to_target = lookahead_point - pos
+    if to_target.length_squared() > 0.001 and vel.length_squared() > 0.001:
+        # 1.0 = straight ahead, 0.0 = 90 degree turn
+        alignment = vel.normalize().dot(to_target.normalize())
+        # Slow down on turns (e.g. drop to 30% speed on sharp corners)
+        corner_multiplier = max(0.3, alignment)
+        target_speed = max_speed * corner_multiplier
+    else:
+        target_speed = max_speed
 
+    # 4. STEERING DECISION
+    # Only use 'arrive' behavior if we are targeting the actual end of the path.
+    # Otherwise, seek the virtual target to maintain speed.
+    if is_at_end:
+        return arrive(pos, vel, lookahead_point, target_speed)
+    else:
+        return seek(pos, vel, lookahead_point, target_speed)
+
+# Helper for standard seek (if you don't have one)
+
+
+def seek(pos, vel, target, max_speed):
+    desired = (target - pos).normalize() * max_speed
+    steering = desired - vel
+    return steering  # usually you clamp this steering force
 # ---------------- Obstacle avoidance blend ----------------
 
 
