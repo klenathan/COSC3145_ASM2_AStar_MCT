@@ -158,6 +158,10 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwa
         current_open: Set of (row, col) tuples representing frontier cells (optional)
         current_node: Tuple of (row, col) representing the current processing node (optional)
         show_overlay: Boolean to show/hide A* traversal overlay (optional, default True)
+        terrain_colors_cache: Pre-calculated terrain colors (optional, for performance)
+        
+    Returns:
+        terrain_colors_cache: The calculated or passed-in terrain colors cache
     """
     from astar_game.config import ROWS, COLS
     
@@ -165,8 +169,21 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwa
     current_open = kwargs.get('current_open', set())
     current_node = kwargs.get('current_node', None)
     show_overlay = kwargs.get('show_overlay', True)  # Default to showing overlay
+    terrain_colors_cache = kwargs.get('terrain_colors_cache', None)
     
-    # First draw terrain base colors with blending and texture
+    # Calculate terrain colors only if cache is invalid (first time or terrain changed)
+    if terrain_colors_cache is None:
+        terrain_colors_cache = {}
+        for r in range(ROWS):
+            for c in range(COLS):
+                cell = (r, c)
+                # Get blended color based on neighbors
+                color = _get_blended_color(terrain, cell, ROWS, COLS)
+                # Add subtle texture variation
+                color = _add_texture_variation(color, cell, variation_amount=0.12)
+                terrain_colors_cache[cell] = color
+    
+    # First draw terrain base colors using cached colors
     for r in range(ROWS):
         for c in range(COLS):
             x = c * CELL_SIZE
@@ -175,13 +192,9 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwa
 
             # Get terrain type for this cell
             cell = (r, c)
-            terrain_type = terrain.get(cell, TERRAIN_GRASS)
             
-            # Get blended color based on neighbors
-            color = _get_blended_color(terrain, cell, ROWS, COLS)
-            
-            # Add subtle texture variation
-            color = _add_texture_variation(color, cell, variation_amount=0.12)
+            # Use cached color
+            color = terrain_colors_cache.get(cell, (0, 0, 0))
 
             # Fill the cell with the blended and textured color
             pygame.draw.rect(surface, color, rect)
@@ -242,6 +255,9 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwa
         pygame.draw.line(grid_surface, grid_color, (0, y), (WINDOW_WIDTH, y), 1)
     
     surface.blit(grid_surface, (0, 0))
+    
+    # Return the cache for reuse in next frame
+    return terrain_colors_cache
 
 
 

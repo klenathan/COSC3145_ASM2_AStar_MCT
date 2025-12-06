@@ -39,8 +39,8 @@ class Game:
     def __init__(self):
         """Initialize the game with default settings."""
         pygame.init()
-        pygame.display.set_caption("A* Pathfinding - Lab 1 Week 5")
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        pygame.display.set_caption("A* Pathfinding - Assignment 2")
+        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED)
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(FONT_NAME, FONT_SIZE)
 
@@ -49,6 +49,7 @@ class Game:
         self.goal = DEFAULT_GOAL
         # Use Perlin terrain generation for more realistic terrain
         self.terrain = generate_perlin_terrain(self.start, self.goal)
+        self.terrain_colors = None  # Cache for pre-calculated terrain colors
         self.current_path = None  # list of cells from start to goal
         self.current_closed = set()  # set of visited cells
         self.current_open = set() # set of frontier cells
@@ -126,6 +127,7 @@ class Game:
         self.is_visualizing = False
         self.astar_generator = None
         self.visualization_target = None
+        self.terrain_colors = None  # Invalidate color cache when terrain changes
 
     def handle_events(self):
         """Handle pygame events."""
@@ -312,7 +314,7 @@ class Game:
     def draw(self):
         """Draw the current game state."""
         self.screen.fill(COLOR_BG)
-        draw_grid(
+        self.terrain_colors = draw_grid(
             self.screen,
             self.terrain,
             self.start,
@@ -321,7 +323,8 @@ class Game:
             self.current_closed,
             current_open=self.current_open,
             current_node=self.current_node,
-            show_overlay=self.overlay_toggle.state
+            show_overlay=self.overlay_toggle.state,
+            terrain_colors_cache=self.terrain_colors
         )
         # Draw frog on top of grid
         self.frog.draw(self.screen)
