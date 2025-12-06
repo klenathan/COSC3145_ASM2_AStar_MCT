@@ -414,7 +414,7 @@ class MCTSNode:
         # - and every legal move already has a child
         return legal_moves.issubset(child_moves) and len(legal_moves) == len(child_moves)
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param=1.414):
         """
         Select a child using the UCT formula.
 
@@ -427,7 +427,7 @@ class MCTSNode:
         - explore encourages trying moves that are less visited.
 
         c_param (exploration constant) controls how much we explore.
-        A common choice is around 1.4 (square root of 2).
+        A common choice is around 1.414 (square root of 2).
 
         If a child has never been visited (visits == 0),
         we treat its score as infinity to ensure it is explored at least once.

@@ -32,7 +32,7 @@ def main():
     pygame.init()
 
     # Start with board-only size (no debug panel)
-    screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
+    screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT), pygame.SCALED)
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("arial", 24)
 
