@@ -5,7 +5,7 @@ A* pathfinding algorithm implementation.
 import math
 import heapq
 from astar_game.grid import get_neighbors
-from astar_game.config import TERRAIN_COSTS, TERRAIN_WALL, TERRAIN_GRASS
+from astar_game.config import TERRAIN_COSTS, TERRAIN_WALL, TERRAIN_GRASS, ROWS, COLS
 
 
 def heuristic(a, b):
@@ -57,15 +57,25 @@ def run_astar_step(start, goal, terrain, allow_diagonal_neighbors=False):
         - closed_set: Set of visited cells
         - current_node: The node currently being processed
     """
+    # Validate start and goal are within bounds
+    if not (0 <= start[0] < ROWS and 0 <= start[1] < COLS):
+        return
+    if not (0 <= goal[0] < ROWS and 0 <= goal[1] < COLS):
+        return
+    
     # If start or goal is a wall, we cannot find a path
     if start in terrain and terrain[start] == TERRAIN_WALL:
         return
     if goal in terrain and terrain[goal] == TERRAIN_WALL:
         return
 
-    # Priority queue (min heap) of (f_score, cell)
+    # Priority queue (min heap) of (f_score, h_score, counter, cell)
+    # h_score for tie-breaking: prefer nodes closer to goal
+    # counter ensures stable sorting when f_score and h_score are equal
     open_heap = []
-    heapq.heappush(open_heap, (0, start))
+    counter = 0
+    heapq.heappush(open_heap, (heuristic(start, goal), heuristic(start, goal), counter, start))
+    counter += 1
 
     # For fast membership checks
     open_set = {start}
@@ -80,10 +90,15 @@ def run_astar_step(start, goal, terrain, allow_diagonal_neighbors=False):
 
     while open_heap:
         # Get the cell with the smallest f_score
-        current_f, current = heapq.heappop(open_heap)
-        open_set.remove(current)
-
-        # Mark as visited (temporarily add to closed set for visualization before expansion)
+        # Note: Heap may contain duplicate entries due to lazy deletion approach
+        current_f, current_h, _, current = heapq.heappop(open_heap)
+        
+        # Skip if this is a stale entry (we already found a better path to this node)
+        if current in closed_set:
+            continue
+        
+        # Remove from open set and mark as visited
+        open_set.discard(current)
         closed_set.add(current)
         
         # Build current path for visualization
@@ -125,12 +140,15 @@ def run_astar_step(start, goal, terrain, allow_diagonal_neighbors=False):
             if neighbor not in g_score or tentative_g < g_score[neighbor]:
                 came_from[neighbor] = current
                 g_score[neighbor] = tentative_g
-                f_score[neighbor] = tentative_g + heuristic(neighbor, goal)
+                neighbor_h = heuristic(neighbor, goal)
+                f_score[neighbor] = tentative_g + neighbor_h
 
-                # Add to open_set and heap if not already there
-                if neighbor not in open_set:
-                    heapq.heappush(open_heap, (f_score[neighbor], neighbor))
-                    open_set.add(neighbor)
+                # Lazy deletion approach: always push to heap when we find a better path
+                # Stale entries will be skipped when popped (checked via closed_set)
+                # This avoids expensive heap updates while maintaining correctness
+                heapq.heappush(open_heap, (f_score[neighbor], neighbor_h, counter, neighbor))
+                counter += 1
+                open_set.add(neighbor)
     
     # Yield final state if no path found
     yield None, open_set.copy(), closed_set.copy(), None

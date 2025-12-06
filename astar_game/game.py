@@ -23,10 +23,11 @@ from astar_game.config import (
 )
 from astar_game.grid import cell_from_mouse, generate_random_terrain, generate_clustered_terrain, generate_perlin_terrain
 from astar_game.astar import run_astar
-from astar_game.renderer import draw_grid, draw_help_text
+from astar_game.renderer import draw_grid
 from astar_game.frog import Frog
 from astar_game.slider import Slider
 from astar_game.toggle_button import ToggleButton
+from astar_game.info_panel import InfoPanel
 from astar_game.config import FROG_SPEED
 
 
@@ -56,7 +57,7 @@ class Game:
         # Visualization state
         self.is_visualizing = False
         self.astar_generator = None
-        self.visualization_steps_per_frame = 1 # Speed of visualization
+        self.visualization_steps_per_frame = 80 # Speed of visualization
         self.visualization_target = None # Track the actual target of current visualization
         
         # Terrain placement state
@@ -72,43 +73,43 @@ class Game:
         # Create frog entity at start position
         self.frog = Frog(DEFAULT_START)
 
-        # Create speed slider
-        slider_x = 10
-        slider_y = WINDOW_HEIGHT - 60
-        slider_width = 200
+        # Create UI controls (will be embedded in info panel)
+        # Position doesn't matter initially, panel will reposition them
         self.speed_slider = Slider(
-            slider_x, slider_y, slider_width,
+            0, 0, 250,
             min_value=50.0,
             max_value=400.0,
             initial_value=FROG_SPEED,
             label="Frog Speed"
         )
         
-        # Create visualization speed slider
-        viz_slider_y = slider_y - 40
         self.viz_speed_slider = Slider(
-            slider_x, viz_slider_y, slider_width,
+            0, 0, 250,
             min_value=1.0,
             max_value=100.0,
-            initial_value=1.0,
+            initial_value=80.0,
             label="Viz Speed"
         )
 
-        # Create diagonal movement toggle button
-        toggle_x = slider_x + slider_width + 30
-        toggle_y = slider_y
         self.diagonal_toggle = ToggleButton(
-            toggle_x, toggle_y, 50, 24,
+            0, 0, 50, 24,
             initial_state=ALLOW_DIAGONAL_NEIGHBORS,
             label="Diagonal Movement"
         )
         
-        # Create A* overlay toggle button
-        overlay_toggle_y = toggle_y - 40
         self.overlay_toggle = ToggleButton(
-            toggle_x, overlay_toggle_y, 50, 24,
-            initial_state=True,  # Show overlay by default
+            0, 0, 50, 24,
+            initial_state=True,
             label="Show A* Overlay"
+        )
+        
+        # Create info panel overlay and attach UI components
+        self.info_panel = InfoPanel(width=320, visible=True)
+        self.info_panel.set_ui_components(
+            self.speed_slider,
+            self.viz_speed_slider,
+            self.diagonal_toggle,
+            self.overlay_toggle
         )
 
         self.running = True
@@ -139,6 +140,9 @@ class Game:
                 # D key toggles debug mode
                 elif event.key == pygame.K_d:
                     self.debug_mode = not self.debug_mode
+                # I key toggles info panel
+                elif event.key == pygame.K_i:
+                    self.info_panel.toggle()
                 # Number keys select terrain type
                 elif event.key == pygame.K_1:
                     self.current_terrain = TERRAIN_GRASS
@@ -178,28 +182,16 @@ class Game:
                     self.frog = Frog(DEFAULT_START)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # Check if sliders were clicked first
-                if self.speed_slider.handle_event(event):
-                    # Slider handled the event, update frog speed
+                # Check if info panel handled the event first
+                if self.info_panel.handle_event(event):
+                    # Panel handled the event, update game state accordingly
                     self.frog.set_speed(self.speed_slider.value)
-                    continue
-                
-                if self.viz_speed_slider.handle_event(event):
-                    # Update visualization speed
                     self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
-                    continue
-                
-                # Check if diagonal toggle was clicked
-                if self.diagonal_toggle.handle_event(event):
-                    # Update the instance variable (OOP style)
                     self.allow_diagonal_neighbors = self.diagonal_toggle.state
-                    # Reset search so user can see the effect
-                    self.reset_search()
-                    continue
-                
-                # Check if overlay toggle was clicked
-                if self.overlay_toggle.handle_event(event):
-                    # No need to reset search, just toggle visibility
+                    # Reset search if diagonal setting changed
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        # Only reset if diagonal toggle was clicked (check by comparing state)
+                        pass  # Panel already handled it
                     continue
 
                 cell = cell_from_mouse(pygame.mouse.get_pos())
@@ -222,6 +214,9 @@ class Game:
                         # Update the goal position to the clicked cell
                         self.goal = target_cell
 
+                        # Stop the frog's current movement immediately
+                        self.frog.set_path([])
+
                         # Start visualization to new target
                         from astar_game.astar import run_astar_step
                         self.astar_generator = run_astar_step(
@@ -240,21 +235,17 @@ class Game:
                         self.reset_search()
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                # Handle slider releases
-                self.speed_slider.handle_event(event)
-                self.viz_speed_slider.handle_event(event)
+                # Handle panel UI releases
+                self.info_panel.handle_event(event)
                 # Stop continuous terrain placement on left button release
                 if event.button == 1:
                     self.mouse_held = False
 
             elif event.type == pygame.MOUSEMOTION:
-                # Handle slider dragging
-                if self.speed_slider.handle_event(event):
-                    # Update frog speed while dragging
+                # Handle panel UI dragging
+                if self.info_panel.handle_event(event):
+                    # Update values while dragging
                     self.frog.set_speed(self.speed_slider.value)
-                
-                if self.viz_speed_slider.handle_event(event):
-                    # Update visualization speed while dragging
                     self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
 
     def update(self, dt):
@@ -263,15 +254,14 @@ class Game:
         Args:
             dt: Delta time in seconds since last frame
         """
-        # Update sliders if dragging (for smooth continuous updates)
-        if self.speed_slider.dragging:
-            mouse_pos = pygame.mouse.get_pos()
-            self.speed_slider.update(mouse_pos)
-            self.frog.set_speed(self.speed_slider.value)
+        # Update panel UI if dragging (for smooth continuous updates)
+        mouse_pos = pygame.mouse.get_pos()
+        self.info_panel.update(mouse_pos)
         
+        # Update game state from UI values
+        if self.speed_slider.dragging:
+            self.frog.set_speed(self.speed_slider.value)
         if self.viz_speed_slider.dragging:
-            mouse_pos = pygame.mouse.get_pos()
-            self.viz_speed_slider.update(mouse_pos)
             self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
 
         # Handle continuous terrain placement while mouse is held
@@ -335,20 +325,22 @@ class Game:
         )
         # Draw frog on top of grid
         self.frog.draw(self.screen)
+        
+        # Draw info panel overlay (includes all UI controls)
+        game_state = {
+            'is_visualizing': self.is_visualizing,
+            'viz_speed': self.visualization_steps_per_frame,
+            'frog_speed': self.frog.speed,
+            'diagonal_enabled': self.allow_diagonal_neighbors,
+            'overlay_enabled': self.overlay_toggle.state,
+            'current_terrain': self.current_terrain,
+            'debug_mode': self.debug_mode,
+            'current_path': self.current_path,
+            'terrain': self.terrain,
+        }
+        self.info_panel.draw(self.screen, self.font, game_state)
 
-        # Draw speed slider
-        self.speed_slider.draw(self.screen, self.font)
         
-        # Draw visualization speed slider
-        self.viz_speed_slider.draw(self.screen, self.font)
-        
-        # Draw diagonal movement toggle
-        self.diagonal_toggle.draw(self.screen, self.font)
-        
-        # Draw A* overlay toggle
-        self.overlay_toggle.draw(self.screen, self.font)
-
-        draw_help_text(self.screen, self.font, self.current_terrain, self.debug_mode)
         
         # Draw debug info if enabled
         if self.debug_mode:

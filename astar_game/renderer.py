@@ -244,32 +244,6 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwa
     surface.blit(grid_surface, (0, 0))
 
 
-def draw_help_text(surface, font, current_terrain=None, debug_mode=False):
-    """
-    Draw the help text at the bottom of the screen.
-    
-    Args:
-        surface: pygame.Surface to draw on
-        font: pygame.font.Font object for rendering text
-        current_terrain: Current selected terrain type for placement (optional)
-        debug_mode: Whether debug mode is enabled (optional)
-    """
-    from astar_game.config import COLOR_TEXT, WINDOW_HEIGHT, TERRAIN_GRASS, TERRAIN_WATER, TERRAIN_MUD, TERRAIN_WALL
-    
-    # Build terrain indicator
-    terrain_name = "Grass"
-    if current_terrain == TERRAIN_WATER:
-        terrain_name = "Water"
-    elif current_terrain == TERRAIN_MUD:
-        terrain_name = "Mud"
-    elif current_terrain == TERRAIN_WALL:
-        terrain_name = "Wall"
-    
-    debug_indicator = " [DEBUG: ON]" if debug_mode else ""
-    help_text = f"1-4: terrain ({terrain_name})  LMB: place  RMB: target  MMB: goal  SPACE: A*  G: toggle gen  D: debug{debug_indicator}  ESC: quit"
-    text_surface = font.render(help_text, True, COLOR_TEXT)
-    surface.blit(text_surface, (10, WINDOW_HEIGHT - 24))
-
 
 
 def draw_debug_info(surface, font, frog, terrain, current_path, current_closed, start, goal, fps):
@@ -355,7 +329,7 @@ def draw_debug_info(surface, font, frog, terrain, current_path, current_closed, 
             is_diagonal = dr == 1 and dc == 1
             base_cost = math.sqrt(2) if is_diagonal else 1.0
             # Get terrain cost of destination cell
-            terrain_type = terrain.get(current_path[i + 1], "grass")
+            terrain_type = terrain.get(current_path[i + 1], TERRAIN_GRASS)
             terrain_multiplier = TERRAIN_COSTS.get(terrain_type, 1.0)
             path_cost += base_cost * terrain_multiplier
     
