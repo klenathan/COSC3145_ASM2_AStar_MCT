@@ -147,6 +147,115 @@ def draw_debug_panel(screen, font, state: Connect4State, debug_mode=False, debug
                         (panel_x + 10, y_offset), 
                         (panel_x + panel_width - 10, y_offset), 2)
         y_offset += 15
+        
+        # === Vertical Bar Chart from AI Stats ===
+        # If we have AI stats but no debug_stats (AI vs AI mode), show vertical bars
+        if all_moves and debug_stats is None:
+            # Title for the vertical bar chart
+            chart_title_font = pygame.font.SysFont("arial", 14, bold=True)
+            chart_title = chart_title_font.render("Column Win Rates:", True, theme.text_color)
+            screen.blit(chart_title, (panel_x + 10, y_offset))
+            y_offset += 22
+
+            # Vertical bar chart settings
+            max_bar_height = 180  # Maximum height for bars
+            bar_width_per_col = 30  # Width of each vertical bar
+            bar_spacing = 8  # Space between bars
+            chart_start_x = panel_x + 15
+            chart_start_y = y_offset + max_bar_height + 5  # Bottom of the chart
+            
+            # Determine which player made the last move (whose stats we're showing)
+            # The stats are from the perspective of the player who JUST moved
+            # state.current_player is the NEXT player to move, so the last player is the opposite
+            if state.current_player == PLAYER1:
+                last_moving_player = PLAYER2
+            else:
+                last_moving_player = PLAYER1
+            
+            # Draw all columns in order (0 to COLS-1)
+            for col in range(COLS):
+                # Get win rate for this column from all_moves
+                col_stats = all_moves.get(col)
+                
+                if col_stats:
+                    win_rate = col_stats.get('win_rate', 50.0)
+                    # Win rate is from the last moving player's perspective
+                    # For visualization: last moving player's win rate vs opponent's win rate
+                    moving_player_rate = win_rate
+                    opponent_rate = 100.0 - win_rate
+                else:
+                    # Column not explored (illegal move)
+                    moving_player_rate = 0.0
+                    opponent_rate = 0.0
+
+                # Calculate bar heights based on normalized percentages
+                moving_player_height = int((moving_player_rate / 100.0) * max_bar_height)
+                opponent_height = int((opponent_rate / 100.0) * max_bar_height)
+
+                # X position for this column's bar
+                bar_x = chart_start_x + col * (bar_width_per_col + bar_spacing)
+                
+                # Highlight selected column with background
+                if selected_col is not None and col == selected_col:
+                    highlight_rect = pygame.Rect(
+                        bar_x - 3, 
+                        chart_start_y - max_bar_height - 20,
+                        bar_width_per_col + 6,
+                        max_bar_height + 40
+                    )
+                    pygame.draw.rect(screen, (50, 100, 50), highlight_rect, border_radius=5)
+                    pygame.draw.rect(screen, (100, 200, 100), highlight_rect, width=2, border_radius=5)
+
+                # Draw background bar (gray)
+                pygame.draw.rect(screen, (50, 50, 50), 
+                               (bar_x, chart_start_y - max_bar_height, 
+                                bar_width_per_col, max_bar_height))
+
+                # Determine colors based on who made the last move
+                # The win rates are from the last moving player's perspective
+                moving_player_color = theme.player1_color if last_moving_player == PLAYER1 else theme.player2_color
+                opponent_color = theme.player2_color if last_moving_player == PLAYER1 else theme.player1_color
+
+                # Draw moving player segment (bottom, stacked from bottom)
+                if moving_player_height > 0:
+                    pygame.draw.rect(screen, moving_player_color, 
+                                   (bar_x, chart_start_y - moving_player_height, 
+                                    bar_width_per_col, moving_player_height))
+
+                # Draw opponent segment (top, stacked above moving player)
+                if opponent_height > 0:
+                    pygame.draw.rect(screen, opponent_color, 
+                                   (bar_x, chart_start_y - moving_player_height - opponent_height, 
+                                    bar_width_per_col, opponent_height))
+
+                # Draw column label below the bar
+                col_font = pygame.font.SysFont("arial", 12, bold=True)
+                col_text = col_font.render(f"{col}", True, theme.text_color)
+                col_text_rect = col_text.get_rect(center=(bar_x + bar_width_per_col // 2, chart_start_y + 12))
+                screen.blit(col_text, col_text_rect)
+                
+                # Draw percentage labels on bars if there's enough space
+                label_font = pygame.font.SysFont("arial", 10)
+                
+                # Opponent label (top segment)
+                if opponent_height > 20:
+                    opponent_text = label_font.render(f"{opponent_rate:.0f}%", True, (0, 0, 0))
+                    opponent_text_rect = opponent_text.get_rect(
+                        center=(bar_x + bar_width_per_col // 2, 
+                               chart_start_y - moving_player_height - opponent_height // 2))
+                    screen.blit(opponent_text, opponent_text_rect)
+                
+                # Moving player label (bottom segment)
+                if moving_player_height > 20:
+                    moving_text = label_font.render(f"{moving_player_rate:.0f}%", True, (255, 255, 255))
+                    moving_text_rect = moving_text.get_rect(
+                        center=(bar_x + bar_width_per_col // 2, 
+                               chart_start_y - moving_player_height // 2))
+                    screen.blit(moving_text, moving_text_rect)
+
+            # Update y_offset to account for the vertical chart
+            y_offset = chart_start_y + 25
+
 
     # === Win Rates Section ===
     # Only show this section if debug_stats is available (e.g., Human vs AI mode)
@@ -228,24 +337,22 @@ def draw_debug_panel(screen, font, state: Connect4State, debug_mode=False, debug
 
         y_offset += overall_bar_height + 10
 
-        # Draw for each column
-        bar_height = 16
-        bar_spacing = 24
+        # Draw vertical bars for each column (ordered by index)
+        # Title for the vertical bar chart
+        chart_title_font = pygame.font.SysFont("arial", 14, bold=True)
+        chart_title = chart_title_font.render("Column Win Rates:", True, theme.text_color)
+        screen.blit(chart_title, (panel_x + 10, y_offset))
+        y_offset += 22
 
+        # Vertical bar chart settings
+        max_bar_height = 180  # Maximum height for bars
+        bar_width_per_col = 30  # Width of each vertical bar
+        bar_spacing = 8  # Space between bars
+        chart_start_x = panel_x + 15
+        chart_start_y = y_offset + max_bar_height + 5  # Bottom of the chart
+        
+        # Draw all columns in order (0 to COLS-1)
         for col in range(COLS):
-            y_pos = y_offset + col * bar_spacing
-
-            # Highlight selected column
-            if last_ai_move is not None and col == last_ai_move:
-                pygame.draw.rect(screen, (50, 100, 50), 
-                               (panel_x + 5, y_pos - 2, panel_width - 10, bar_height + 4),
-                               border_radius=3)
-
-            # Column label
-            col_font = pygame.font.SysFont("arial", 12)
-            col_text = col_font.render(f"C{col}:", True, theme.text_color)
-            screen.blit(col_text, (panel_x + 10, y_pos))
-
             # Get rates for this column
             p1_rate = player1_rates.get(col, 0.0)
             p2_rate = player2_rates.get(col, 0.0)
@@ -259,41 +366,68 @@ def draw_debug_panel(screen, font, state: Connect4State, debug_mode=False, debug
                 p1_normalized = 50.0
                 p2_normalized = 50.0
 
-            # Calculate bar widths based on normalized percentages
-            col_bar_width = bar_width - 20
-            p1_bar_width = int((p1_normalized / 100.0) * col_bar_width)
-            p2_bar_width = int((p2_normalized / 100.0) * col_bar_width)
+            # Calculate bar heights based on normalized percentages
+            p1_bar_height = int((p1_normalized / 100.0) * max_bar_height)
+            p2_bar_height = int((p2_normalized / 100.0) * max_bar_height)
 
-            # Ensure they fill the entire bar width
-            if p1_bar_width + p2_bar_width < col_bar_width:
-                p2_bar_width = col_bar_width - p1_bar_width
+            # X position for this column's bar
+            bar_x = chart_start_x + col * (bar_width_per_col + bar_spacing)
+            
+            # Highlight selected column with background
+            if last_ai_move is not None and col == last_ai_move:
+                highlight_rect = pygame.Rect(
+                    bar_x - 3, 
+                    chart_start_y - max_bar_height - 20,
+                    bar_width_per_col + 6,
+                    max_bar_height + 40
+                )
+                pygame.draw.rect(screen, (50, 100, 50), highlight_rect, border_radius=5)
+                pygame.draw.rect(screen, (100, 200, 100), highlight_rect, width=2, border_radius=5)
 
-            # Draw background bar
-            pygame.draw.rect(screen, (50, 50, 50), (panel_x + 40,
-                             y_pos, col_bar_width, bar_height))
+            # Draw background bar (gray)
+            pygame.draw.rect(screen, (50, 50, 50), 
+                           (bar_x, chart_start_y - max_bar_height, 
+                            bar_width_per_col, max_bar_height))
 
-            # Draw Player 1 segment (left side)
-            if p1_bar_width > 0:
-                pygame.draw.rect(screen, theme.player1_color, (panel_x + 40,
-                                 y_pos, p1_bar_width, bar_height))
+            # Draw Player 1 segment (bottom, stacked from bottom)
+            if p1_bar_height > 0:
+                pygame.draw.rect(screen, theme.player1_color, 
+                               (bar_x, chart_start_y - p1_bar_height, 
+                                bar_width_per_col, p1_bar_height))
 
-            # Draw Player 2 segment (right side) - stacked after P1
-            if p2_bar_width > 0:
-                pygame.draw.rect(screen, theme.player2_color, (panel_x + 40 + p1_bar_width,
-                                 y_pos, p2_bar_width, bar_height))
+            # Draw Player 2 segment (top, stacked above P1)
+            if p2_bar_height > 0:
+                pygame.draw.rect(screen, theme.player2_color, 
+                               (bar_x, chart_start_y - p1_bar_height - p2_bar_height, 
+                                bar_width_per_col, p2_bar_height))
 
-            # Draw percentage labels on the bar segments
-            if p1_bar_width > 25:  # Only show text if segment is wide enough
-                p1_text = bar_label_font.render(
-                    f"{p1_normalized:.0f}%", True, (255, 255, 255))
-                text_x = panel_x + 40 + p1_bar_width // 2 - p1_text.get_width() // 2
-                screen.blit(p1_text, (text_x, y_pos + 1))
+            # Draw column label below the bar
+            col_font = pygame.font.SysFont("arial", 12, bold=True)
+            col_text = col_font.render(f"{col}", True, theme.text_color)
+            col_text_rect = col_text.get_rect(center=(bar_x + bar_width_per_col // 2, chart_start_y + 12))
+            screen.blit(col_text, col_text_rect)
+            
+            # Draw percentage labels on bars if there's enough space
+            label_font = pygame.font.SysFont("arial", 10)
+            
+            # P2 label (top segment)
+            if p2_bar_height > 20:
+                p2_text = label_font.render(f"{p2_normalized:.0f}%", True, (0, 0, 0))
+                p2_text_rect = p2_text.get_rect(
+                    center=(bar_x + bar_width_per_col // 2, 
+                           chart_start_y - p1_bar_height - p2_bar_height // 2))
+                screen.blit(p2_text, p2_text_rect)
+            
+            # P1 label (bottom segment)
+            if p1_bar_height > 20:
+                p1_text = label_font.render(f"{p1_normalized:.0f}%", True, (255, 255, 255))
+                p1_text_rect = p1_text.get_rect(
+                    center=(bar_x + bar_width_per_col // 2, 
+                           chart_start_y - p1_bar_height // 2))
+                screen.blit(p1_text, p1_text_rect)
 
-            if p2_bar_width > 25:  # Only show text if segment is wide enough
-                p2_text = bar_label_font.render(f"{p2_normalized:.0f}%", True, (0, 0, 0))
-                text_x = panel_x + 40 + p1_bar_width + \
-                    p2_bar_width // 2 - p2_text.get_width() // 2
-                screen.blit(p2_text, (text_x, y_pos + 1))
+        # Update y_offset to account for the vertical chart
+        y_offset = chart_start_y + 25
 
 
 def draw_menu(screen, font, theme=None, mouse_pos=(0, 0)):

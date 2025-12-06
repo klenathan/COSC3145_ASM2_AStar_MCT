@@ -48,6 +48,9 @@ def run_human_vs_ai(screen, clock, font):
     # Track last AI move and its statistics
     last_ai_move = None
     last_ai_stats = None
+    
+    # Hint caching to avoid redundant calculations
+    hint_cache = {}  # Maps state_hash -> (hint_col, stats)
 
     def get_state_hash(s):
         """Create a hash of the current game state to detect changes."""
@@ -57,14 +60,9 @@ def run_human_vs_ai(screen, clock, font):
     while running:
         clock.tick(FPS)
 
-        # Check if state changed and update debug stats if needed
-        current_state_hash = get_state_hash(state)
-        if debug_mode and current_state_hash != last_state_hash and not state.is_terminal():
-            if debug_stats is None or last_state_hash is None:
-                # Calculate stats for new state (keep old stats visible during calculation)
-                new_debug_stats = get_mcts_win_rates(state, n_iter=600)
-                debug_stats = new_debug_stats
-            last_state_hash = current_state_hash
+        # In Human vs AI mode, we reuse AI agent stats instead of recalculating
+        # This eliminates expensive redundant MCTS calculations (600 iterations)
+        # Debug stats are only shown when AI has moved (from last_ai_stats)
 
         # Handle AI turn
         if not game_over and not ai_thinking and state.current_player == PLAYER2:
@@ -88,6 +86,7 @@ def run_human_vs_ai(screen, clock, font):
                 time.sleep(AI_MOVE_DELAY)
                 state.make_move(ai_move)
                 last_state_hash = None  # Force recalculation on next frame
+                hint_cache.clear()  # Clear hint cache when state changes
 
                 # Check game over conditions
                 winner, winning_positions = state.check_winner()
@@ -139,6 +138,7 @@ def run_human_vs_ai(screen, clock, font):
                     animation_frame = 0
                     last_ai_move = None
                     last_ai_stats = None
+                    hint_cache.clear()  # Clear hint cache on restart
                 elif event.key == pygame.K_t:
                     # Cycle theme
                     config.cycle_theme()
@@ -152,8 +152,18 @@ def run_human_vs_ai(screen, clock, font):
                         last_state_hash = None
                     message = "Your turn (Player 1) - Click to move, Press H for hint, D for debug, T for theme"
                 elif event.key == pygame.K_h and not game_over and state.current_player == PLAYER1:
-                    # Show hint for human player
-                    hint_col = mcts_search(state, n_iter=400)
+                    # Show hint for human player with caching
+                    current_state_hash = get_state_hash(state)
+                    
+                    # Check if we have a cached hint for this state
+                    if current_state_hash in hint_cache:
+                        hint_col = hint_cache[current_state_hash]
+                    else:
+                        # Calculate new hint and cache it
+                        hint_col = mcts_search(state, n_iter=800)
+                        if hint_col is not None:
+                            hint_cache[current_state_hash] = hint_col
+                    
                     if hint_col is not None:
                         message = f"Hint: Column {hint_col + 1} - Click to move, Press H for hint, D for debug"
 
@@ -167,6 +177,7 @@ def run_human_vs_ai(screen, clock, font):
                         if col in legal_moves:
                             state.make_move(col)
                             last_state_hash = None  # Force recalculation on next frame
+                            hint_cache.clear()  # Clear hint cache when state changes
 
                             # Check game over conditions
                             winner, winning_positions = state.check_winner()
@@ -392,6 +403,9 @@ def run_human_vs_human(screen, clock, font):
     debug_mode = False
     debug_stats = None
     last_state_hash = None
+    
+    # Hint caching to avoid redundant calculations
+    hint_cache = {}  # Maps state_hash -> hint_col
 
     def get_state_hash(s):
         """Create a hash of the current game state to detect changes."""
@@ -401,14 +415,9 @@ def run_human_vs_human(screen, clock, font):
     while running:
         clock.tick(FPS)
 
-        # Check if state changed and update debug stats if needed
-        current_state_hash = get_state_hash(state)
-        if debug_mode and current_state_hash != last_state_hash and not state.is_terminal():
-            if debug_stats is None or last_state_hash is None:
-                # Calculate stats for new state (keep old stats visible during calculation)
-                new_debug_stats = get_mcts_win_rates(state, n_iter=600)
-                debug_stats = new_debug_stats
-            last_state_hash = current_state_hash
+        # In Human vs Human mode, we don't auto-recalculate debug stats
+        # This eliminates expensive redundant MCTS calculations (600 iterations)
+        # Debug stats are only calculated when debug mode is first toggled on
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -421,11 +430,12 @@ def run_human_vs_human(screen, clock, font):
                     state = Connect4State()
                     game_over = False
                     message = "Player 1 turn - Click to move, Press H for hint, D for debug, T for theme"
-                    hint_col = mcts_search(state, n_iter=600)
+                    hint_col = None
                     debug_stats = None
                     last_state_hash = None
                     winning_positions = []
                     animation_frame = 0
+                    hint_cache.clear()  # Clear hint cache on restart
                 elif event.key == pygame.K_t:
                     # Cycle theme
                     config.cycle_theme()
@@ -440,8 +450,18 @@ def run_human_vs_human(screen, clock, font):
                     current = state.current_player
                     message = f"Player {current} turn - Click to move, Press H for hint, D for debug, T for theme"
                 elif event.key == pygame.K_h and not game_over:
-                    # Show hint for current player
-                    hint_col = mcts_search(state, n_iter=600)
+                    # Show hint for current player with caching
+                    current_state_hash = get_state_hash(state)
+                    
+                    # Check if we have a cached hint for this state
+                    if current_state_hash in hint_cache:
+                        hint_col = hint_cache[current_state_hash]
+                    else:
+                        # Calculate new hint and cache it
+                        hint_col = mcts_search(state, n_iter=600)
+                        if hint_col is not None:
+                            hint_cache[current_state_hash] = hint_col
+                    
                     current = state.current_player
                     message = f"Player {current} turn - Hint shown - Click to move, Press H for hint, D for debug"
 
@@ -456,6 +476,7 @@ def run_human_vs_human(screen, clock, font):
                         if col in legal_moves:
                             state.make_move(col)
                             last_state_hash = None  # Force recalculation on next frame
+                            hint_cache.clear()  # Clear hint cache when state changes
 
                             winner, winning_positions = state.check_winner()
                             if winner == PLAYER1:

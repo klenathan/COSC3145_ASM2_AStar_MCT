@@ -60,8 +60,8 @@ TIME_ATTACK = 4
 TIME_BANK_SECONDS = 120  # 2 minutes per player
 
 # Theme system
-from .themes import CLASSIC, ALL_THEMES
-current_theme = CLASSIC  # Default theme
+from .themes import DARK_MODE, ALL_THEMES
+current_theme = DARK_MODE  # Default theme
 
 def set_theme(theme):
     """Set the current theme."""
@@ -77,8 +77,8 @@ def cycle_theme():
     return current_theme
 
 # AI Configuration
-AI_ITERATIONS_PLAYER1 = 400  # MCTS iterations for AI Player 1
-AI_ITERATIONS_PLAYER2 = 400  # MCTS iterations for AI Player 2
+AI_ITERATIONS_PLAYER1 = 800  # MCTS iterations for AI Player 1
+AI_ITERATIONS_PLAYER2 = 800  # MCTS iterations for AI Player 2
 AI_MOVE_DELAY = 0.2  # Default delay in seconds between AI moves
 AI_MOVE_DELAY_MIN = 0.0  # Minimum delay (instant)
 AI_MOVE_DELAY_MAX = 2.0  # Maximum delay (2 seconds)
@@ -89,3 +89,4 @@ AI_USE_OPTIMIZATIONS = True     # Enable all optimizations by default
 AI_ADAPTIVE_ITERATIONS = True   # Adjust iterations based on position complexity
 AI_MIN_ITERATIONS = 50          # Minimum iterations for simple positions
 AI_MAX_ITERATIONS = 800         # Maximum iterations for complex positions
+
