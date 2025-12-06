@@ -32,10 +32,19 @@ HINT_COLOR = (0, 200, 0)         # Green hint marker
 
 # Screen size
 BOARD_WIDTH = COLS * SQUARESIZE
-DEBUG_PANEL_WIDTH = 700  # Width for debug panel
-WIDTH = BOARD_WIDTH + DEBUG_PANEL_WIDTH
-# Extra 2 rows of space for messages and hint marker
+DEBUG_PANEL_WIDTH = 400  # Width for expanded debug panel
+DEBUG_PANEL_COLLAPSED_WIDTH = 0  # No space for collapsed panel
+# Default width is just the board (debug panel expands it when opened)
 HEIGHT = (ROWS + 2) * SQUARESIZE
+
+def get_window_width(debug_visible=False):
+    """Get the window width based on debug panel visibility."""
+    if debug_visible:
+        return BOARD_WIDTH + DEBUG_PANEL_WIDTH
+    return BOARD_WIDTH
+
+# Default size (without debug panel)
+WIDTH = BOARD_WIDTH
 SIZE = (WIDTH, HEIGHT)
 
 FPS = 60
@@ -70,5 +79,13 @@ def cycle_theme():
 # AI Configuration
 AI_ITERATIONS_PLAYER1 = 400  # MCTS iterations for AI Player 1
 AI_ITERATIONS_PLAYER2 = 400  # MCTS iterations for AI Player 2
-AI_MOVE_DELAY = 0.2  # Delay in seconds between AI moves
+AI_MOVE_DELAY = 0.2  # Default delay in seconds between AI moves
+AI_MOVE_DELAY_MIN = 0.0  # Minimum delay (instant)
+AI_MOVE_DELAY_MAX = 2.0  # Maximum delay (2 seconds)
+AI_MOVE_DELAY_STEP = 0.1  # Step for increasing/decreasing delay
 
+# AI v AI Optimization Settings
+AI_USE_OPTIMIZATIONS = True     # Enable all optimizations by default
+AI_ADAPTIVE_ITERATIONS = True   # Adjust iterations based on position complexity
+AI_MIN_ITERATIONS = 50          # Minimum iterations for simple positions
+AI_MAX_ITERATIONS = 800         # Maximum iterations for complex positions

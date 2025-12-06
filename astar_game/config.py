@@ -7,7 +7,7 @@ ROWS = 50
 COLS = 80
 
 # Cell size in pixels
-CELL_SIZE = 15
+CELL_SIZE = 18
 
 # Window dimensions (computed from grid size)
 WINDOW_WIDTH = COLS * CELL_SIZE

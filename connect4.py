@@ -9,6 +9,7 @@ import sys
 from connect4.game_modes import run_human_vs_ai, run_ai_vs_ai, run_human_vs_human, run_time_attack
 from connect4.renderer import draw_menu
 from connect4 import config
+from connect4.config import BOARD_WIDTH, HEIGHT
 
 
 def main():
@@ -22,47 +23,65 @@ def main():
         - Time Attack: Two human players with time banks
 
     Controls:
-        - Menu: Press 1-4 to select game mode, T to change theme
+        - Menu: Click buttons to select game mode or change theme
         - In game: Press H for hint (Human vs AI and Human vs Human modes)
+        - Press D to toggle debug panel (dynamically resizes window)
         - Press R to restart current game
         - Press ESC to return to menu
     """
     pygame.init()
 
-    screen = pygame.display.set_mode(config.SIZE)
+    # Start with board-only size (no debug panel)
+    screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
     clock = pygame.time.Clock()
     font = pygame.font.SysFont("arial", 24)
 
     current_mode = config.MENU
     running = True
+    menu_buttons = None  # Store menu buttons for click detection
 
     while running:
         clock.tick(config.FPS)
 
         if current_mode == config.MENU:
-            # Get current theme from config module each time to ensure it's up to date
-            draw_menu(screen, font, config.current_theme)
+            # Ensure window is reset to board-only size for menu
+            if screen.get_width() != BOARD_WIDTH:
+                screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
+            
+            # Get current mouse position for hover effects
+            mouse_pos = pygame.mouse.get_pos()
+            
+            # Draw menu and get button instances
+            menu_buttons = draw_menu(screen, font, config.current_theme, mouse_pos)
+            pygame.display.update()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_1:
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    # Check which button was clicked
+                    if menu_buttons["human_vs_ai"].is_clicked(mouse_pos):
                         current_mode = config.HUMAN_VS_AI
-                    elif event.key == pygame.K_2:
+                    elif menu_buttons["ai_vs_ai"].is_clicked(mouse_pos):
                         current_mode = config.AI_VS_AI
-                    elif event.key == pygame.K_3:
+                    elif menu_buttons["human_vs_human"].is_clicked(mouse_pos):
                         current_mode = config.HUMAN_VS_HUMAN
-                    elif event.key == pygame.K_4:
+                    elif menu_buttons["time_attack"].is_clicked(mouse_pos):
                         current_mode = config.TIME_ATTACK
-                    elif event.key == pygame.K_t:
-                        # Cycle theme - this updates config.current_theme
+                    elif menu_buttons["theme"].is_clicked(mouse_pos):
+                        # Cycle theme when theme button is clicked
+                        config.cycle_theme()
+                elif event.type == pygame.KEYDOWN:
+                    # Keep 'T' key for theme cycling as alternative
+                    if event.key == pygame.K_t:
                         config.cycle_theme()
 
         elif current_mode == config.HUMAN_VS_AI:
             return_to_menu = run_human_vs_ai(screen, clock, font)
             if return_to_menu:
                 current_mode = config.MENU
+                # Reset window size for menu
+                screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
             else:
                 running = False
 
@@ -70,6 +89,8 @@ def main():
             return_to_menu = run_ai_vs_ai(screen, clock, font)
             if return_to_menu:
                 current_mode = config.MENU
+                # Reset window size for menu
+                screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
             else:
                 running = False
 
@@ -77,6 +98,8 @@ def main():
             return_to_menu = run_human_vs_human(screen, clock, font)
             if return_to_menu:
                 current_mode = config.MENU
+                # Reset window size for menu
+                screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
             else:
                 running = False
 
@@ -84,6 +107,8 @@ def main():
             return_to_menu = run_time_attack(screen, clock, font)
             if return_to_menu:
                 current_mode = config.MENU
+                # Reset window size for menu
+                screen = pygame.display.set_mode((BOARD_WIDTH, HEIGHT))
             else:
                 running = False
 

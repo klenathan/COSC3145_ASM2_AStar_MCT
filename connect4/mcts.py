@@ -58,7 +58,317 @@ The main idea:
 import math
 import random
 from .state import Connect4State
-from .config import COLS, PLAYER1, PLAYER2
+from .config import COLS, PLAYER1, PLAYER2, EMPTY
+
+
+# =============================================================================
+# AI v AI Optimization Components
+# =============================================================================
+
+def get_board_hash(board, current_player):
+    """
+    Compute hash of board state for transposition table.
+    
+    Arguments:
+        board: 2D list representing the game board
+        current_player: Current player to move
+    
+    Returns:
+        Integer hash value unique to this game state
+    """
+    return hash(tuple(tuple(row) for row in board) + (current_player,))
+
+
+# =============================================================================
+# Ultra-Fast Board Simulation (No Object Overhead)
+# =============================================================================
+
+def fast_copy_board(board):
+    """Create a fast shallow copy of board for simulation."""
+    return [row[:] for row in board]
+
+
+def fast_get_legal_moves(board):
+    """Get legal moves from raw board (no object overhead)."""
+    return [c for c in range(len(board[0])) if board[0][c] == EMPTY]
+
+
+def fast_make_move(board, col, player):
+    """
+    Make a move on raw board and return the row where piece landed.
+    Returns -1 if column is full.
+    """
+    rows = len(board)
+    for r in range(rows - 1, -1, -1):
+        if board[r][col] == EMPTY:
+            board[r][col] = player
+            return r
+    return -1
+
+
+def fast_undo_move(board, col, row):
+    """Undo a move by clearing the cell."""
+    board[row][col] = EMPTY
+
+
+def fast_check_win(board, row, col, player):
+    """
+    Check if the move at (row, col) wins the game.
+    Only checks lines through the placed piece.
+    """
+    rows = len(board)
+    cols = len(board[0])
+    
+    directions = [(0, 1), (1, 0), (1, 1), (1, -1)]
+    
+    for dr, dc in directions:
+        count = 1
+        # Positive direction
+        r, c = row + dr, col + dc
+        while 0 <= r < rows and 0 <= c < cols and board[r][c] == player:
+            count += 1
+            r += dr
+            c += dc
+        # Negative direction 
+        r, c = row - dr, col - dc
+        while 0 <= r < rows and 0 <= c < cols and board[r][c] == player:
+            count += 1
+            r -= dr
+            c -= dc
+        if count >= 4:
+            return True
+    return False
+
+
+def fast_rollout(board, current_player, root_player):
+    """
+    Ultra-fast rollout using random moves on raw board.
+    
+    This is much faster than smart_rollout because:
+    1. No object creation
+    2. No state cloning
+    3. Simple random move selection
+    
+    Returns:
+        1.0 if root_player wins
+        0.0 if opponent wins
+        0.5 if draw
+    """
+    player = current_player
+    
+    while True:
+        legal_moves = fast_get_legal_moves(board)
+        if not legal_moves:
+            return 0.5  # Draw - board full
+        
+        # Random move selection
+        col = random.choice(legal_moves)
+        row = fast_make_move(board, col, player)
+        
+        if row >= 0 and fast_check_win(board, row, col, player):
+            return 1.0 if player == root_player else 0.0
+        
+        # Switch player
+        player = PLAYER1 if player == PLAYER2 else PLAYER2
+
+
+def fast_smart_rollout(board, current_player, root_player):
+    """
+    Fast rollout with win/block detection but minimal object overhead.
+    Balances speed with smart play.
+    """
+    player = current_player
+    rows = len(board)
+    
+    while True:
+        legal_moves = fast_get_legal_moves(board)
+        if not legal_moves:
+            return 0.5  # Draw
+        
+        opponent = PLAYER1 if player == PLAYER2 else PLAYER2
+        selected_move = None
+        
+        # Check for winning move
+        for col in legal_moves:
+            row = -1
+            for r in range(rows - 1, -1, -1):
+                if board[r][col] == EMPTY:
+                    row = r
+                    break
+            if row >= 0:
+                board[row][col] = player
+                if fast_check_win(board, row, col, player):
+                    # Found win - clean up and return
+                    return 1.0 if player == root_player else 0.0
+                board[row][col] = EMPTY
+        
+        # Check for blocking move
+        for col in legal_moves:
+            row = -1
+            for r in range(rows - 1, -1, -1):
+                if board[r][col] == EMPTY:
+                    row = r
+                    break
+            if row >= 0:
+                board[row][col] = opponent
+                if fast_check_win(board, row, col, opponent):
+                    board[row][col] = EMPTY
+                    selected_move = col
+                    break
+                board[row][col] = EMPTY
+        
+        # Random if no forced move
+        if selected_move is None:
+            selected_move = random.choice(legal_moves)
+        
+        # Make the move
+        row = fast_make_move(board, selected_move, player)
+        
+        if row >= 0 and fast_check_win(board, row, selected_move, player):
+            return 1.0 if player == root_player else 0.0
+        
+        player = opponent
+
+
+def detect_forced_move(state):
+    """
+    Detect if there's a forced win or block available.
+    
+    Returns:
+        (move, is_winning) tuple where:
+        - move: Column index of forced move, or None
+        - is_winning: True if it's a winning move, False if blocking
+    """
+    current_player = state.current_player
+    opponent = PLAYER1 if current_player == PLAYER2 else PLAYER2
+    board = state.board
+    legal_moves = state.get_legal_moves()
+    rows = len(board)
+    
+    # Check for immediate winning move
+    for col in legal_moves:
+        # Find drop row
+        row = -1
+        for r in range(rows - 1, -1, -1):
+            if board[r][col] == EMPTY:
+                row = r
+                break
+        if row >= 0:
+            # Check if this creates a win
+            board[row][col] = current_player
+            if check_win_at_position(board, row, col, current_player):
+                board[row][col] = EMPTY
+                return (col, True)
+            board[row][col] = EMPTY
+    
+    # Check for blocking move
+    for col in legal_moves:
+        row = -1
+        for r in range(rows - 1, -1, -1):
+            if board[r][col] == EMPTY:
+                row = r
+                break
+        if row >= 0:
+            board[row][col] = opponent
+            if check_win_at_position(board, row, col, opponent):
+                board[row][col] = EMPTY
+                return (col, False)
+            board[row][col] = EMPTY
+    
+    return (None, False)
+
+
+def estimate_position_complexity(state):
+    """
+    Estimate how many iterations needed based on position complexity.
+    
+    Simple positions (forced moves, few legal moves) need fewer iterations.
+    Complex positions (many options, mid-game) need more iterations.
+    
+    Arguments:
+        state: Current Connect4State
+    
+    Returns:
+        Suggested iteration multiplier (0.25 to 1.0)
+    """
+    # Check for forced moves (win or block)
+    forced_move, is_winning = detect_forced_move(state)
+    if forced_move is not None:
+        if is_winning:
+            return 0.1  # Just take the win
+        else:
+            return 0.25  # Must block, but verify no better option
+    
+    # Count legal moves
+    legal_moves = state.get_legal_moves()
+    num_moves = len(legal_moves)
+    
+    if num_moves <= 2:
+        return 0.5  # Few options, less exploration needed
+    elif num_moves <= 4:
+        return 0.75
+    else:
+        return 1.0  # Full exploration
+
+
+class MCTSTreeManager:
+    """
+    Manages tree persistence between moves for AI v AI optimization.
+    
+    Instead of discarding the entire MCTS tree after each move, this class
+    allows reusing the subtree that corresponds to the opponent's actual move.
+    This preserves valuable search information from previous iterations.
+    """
+    
+    def __init__(self):
+        self.last_root = None
+        self.last_move = None
+    
+    def get_reusable_root(self, opponent_move):
+        """
+        Find and return a reusable subtree after opponent's move.
+        
+        Arguments:
+            opponent_move: The column where opponent just played
+        
+        Returns:
+            MCTSNode that can be used as root, or None if no reusable tree
+        """
+        if self.last_root is None or opponent_move is None:
+            return None
+        
+        # Find the child that corresponds to opponent's move
+        for child in self.last_root.children:
+            if child.move == opponent_move:
+                # Found it! Detach from parent and return
+                child.parent = None
+                return child
+        
+        # Opponent's move wasn't explored - start fresh
+        return None
+    
+    def store_root(self, root_node, selected_move):
+        """
+        Store the root and selected move for potential reuse.
+        
+        Arguments:
+            root_node: The MCTSNode that was used as root
+            selected_move: The move that was selected
+        """
+        # Find the child corresponding to our selected move
+        for child in root_node.children:
+            if child.move == selected_move:
+                self.last_root = child
+                self.last_move = selected_move
+                return
+        
+        self.last_root = None
+        self.last_move = None
+    
+    def clear(self):
+        """Clear the stored tree (e.g., on game restart)."""
+        self.last_root = None
+        self.last_move = None
 
 
 class MCTSNode:
@@ -213,6 +523,158 @@ def rollout(state, root_player):
         return 0.0
 
 
+def check_win_at_position(board, row, col, player):
+    """
+    Efficiently check if placing a piece at (row, col) creates a win.
+    
+    Only checks lines passing through the given position rather than
+    scanning the entire board. This is O(1) instead of O(rows*cols).
+    
+    Arguments:
+        board: 2D list representing the game board
+        row: Row where piece was placed
+        col: Column where piece was placed
+        player: Player ID to check for
+    
+    Returns:
+        True if this position creates 4-in-a-row, False otherwise
+    """
+    directions = [
+        (0, 1),   # Horizontal
+        (1, 0),   # Vertical
+        (1, 1),   # Diagonal down-right
+        (1, -1),  # Diagonal down-left
+    ]
+    
+    rows = len(board)
+    cols = len(board[0])
+    
+    for dr, dc in directions:
+        count = 1  # Count the piece at (row, col)
+        
+        # Check in positive direction
+        r, c = row + dr, col + dc
+        while 0 <= r < rows and 0 <= c < cols and board[r][c] == player:
+            count += 1
+            r += dr
+            c += dc
+        
+        # Check in negative direction
+        r, c = row - dr, col - dc
+        while 0 <= r < rows and 0 <= c < cols and board[r][c] == player:
+            count += 1
+            r -= dr
+            c -= dc
+        
+        if count >= 4:
+            return True
+    
+    return False
+
+
+def get_drop_row(board, col):
+    """
+    Get the row where a piece would land if dropped in the given column.
+    
+    Returns:
+        Row index where piece would land, or -1 if column is full
+    """
+    rows = len(board)
+    for r in range(rows - 1, -1, -1):
+        if board[r][col] == EMPTY:
+            return r
+    return -1
+
+
+def select_smart_move(state, legal_moves):
+    """
+    Select a move using simple heuristics for smarter rollout.
+    
+    OPTIMIZED VERSION: Uses local win checking instead of full board scan.
+
+    Priority order:
+        1. Take a winning move if available
+        2. Block opponent's winning move if they can win next turn
+        3. Otherwise, pick a move uniformly at random
+
+    Arguments:
+        state: Current Connect4State
+        legal_moves: List of legal column indices
+
+    Returns:
+        Column index of the selected move
+    """
+    current_player = state.current_player
+    opponent = PLAYER1 if current_player == PLAYER2 else PLAYER2
+    board = state.board
+
+    # 1. Check for immediate winning move (fast check)
+    for col in legal_moves:
+        row = get_drop_row(board, col)
+        if row >= 0:
+            # Temporarily place piece
+            board[row][col] = current_player
+            if check_win_at_position(board, row, col, current_player):
+                board[row][col] = EMPTY  # Restore
+                return col  # Take the win!
+            board[row][col] = EMPTY  # Restore
+
+    # 2. Check if opponent can win and block them (fast check)
+    for col in legal_moves:
+        row = get_drop_row(board, col)
+        if row >= 0:
+            # Temporarily place opponent's piece
+            board[row][col] = opponent
+            if check_win_at_position(board, row, col, opponent):
+                board[row][col] = EMPTY  # Restore
+                return col  # Block opponent's winning move!
+            board[row][col] = EMPTY  # Restore
+
+    # 3. No immediate wins or blocks, choose randomly
+    return random.choice(legal_moves)
+
+
+def smart_rollout(state, root_player):
+    """
+    Perform a heuristic-guided simulation (rollout) from the given state.
+
+    This is an improved version of the basic random rollout that uses
+    simple heuristics during simulation:
+        1. Always take a winning move if available
+        2. Always block opponent's winning move
+        3. Otherwise choose randomly
+
+    This produces more realistic game outcomes and helps MCTS
+    converge faster to good moves.
+
+    Arguments:
+        state: Connect4State from which to start simulation
+        root_player: the player we consider as "our" perspective
+
+    Returns:
+        1.0 if root_player wins
+        0.0 if opponent wins
+        0.5 if draw
+    """
+    temp_state = state.clone()
+
+    while not temp_state.is_terminal():
+        legal_moves = temp_state.get_legal_moves()
+        if not legal_moves:
+            break
+
+        # Use smart move selection instead of random
+        move = select_smart_move(temp_state, legal_moves)
+        temp_state.make_move(move)
+
+    winner, _ = temp_state.check_winner()
+    if winner is None:
+        return 0.5
+    if winner == root_player:
+        return 1.0
+    return 0.0
+
+
 def mcts_search(root_state, n_iter=400):
     """
     Run MCTS from the given root_state and return the best move.
@@ -270,19 +732,9 @@ def mcts_search(root_state, n_iter=400):
             untried_moves = [m for m in legal_moves if m not in existing_moves]
 
             if untried_moves:
-                # Prefer center column (column 3) when expanding, especially on first turn
-                # This helps the AI make smarter first moves
-                center_col = COLS // 2  # Column 3 (0-indexed)
-                if center_col in untried_moves and len(untried_moves) > 1:
-                    # Give center column higher probability, but still allow exploration
-                    # Weight: center gets 3x probability, others get 1x
-                    weights = [3.0 if m ==
-                               center_col else 1.0 for m in untried_moves]
-                    move = random.choices(
-                        untried_moves, weights=weights, k=1)[0]
-                else:
-                    # If center is not available or it's the only move, pick randomly
-                    move = random.choice(untried_moves)
+                # Pure MCTS: select untried move uniformly at random
+                # This ensures unbiased exploration of the game tree
+                move = random.choice(untried_moves)
                 # Apply it to the simulation state
                 state.make_move(move)
                 # Create the new child node
@@ -293,8 +745,8 @@ def mcts_search(root_state, n_iter=400):
                 node = child_node
 
         # 4. SIMULATION (ROLLOUT)
-        # From this node's state, simulate a random game until the end.
-        reward = rollout(state, root_player)
+        # Use smart rollout with win/block detection for better estimates
+        reward = smart_rollout(state, root_player)
 
         # 5. BACKPROPAGATION
         # Walk up the tree and update visit and win counts.
@@ -347,26 +799,16 @@ def mcts_search_with_stats(root_state, n_iter=400):
             untried_moves = [m for m in legal_moves if m not in existing_moves]
 
             if untried_moves:
-                # Prefer center column (column 3) when expanding, especially on first turn
-                # This helps the AI make smarter first moves
-                center_col = COLS // 2  # Column 3 (0-indexed)
-                if center_col in untried_moves and len(untried_moves) > 1:
-                    # Give center column higher probability, but still allow exploration
-                    # Weight: center gets 3x probability, others get 1x
-                    weights = [3.0 if m ==
-                               center_col else 1.0 for m in untried_moves]
-                    move = random.choices(
-                        untried_moves, weights=weights, k=1)[0]
-                else:
-                    # If center is not available or it's the only move, pick randomly
-                    move = random.choice(untried_moves)
+                # Pure MCTS: select untried move uniformly at random
+                # This ensures unbiased exploration of the game tree
+                move = random.choice(untried_moves)
                 state.make_move(move)
                 child_node = MCTSNode(state.clone(), parent=node, move=move)
                 node.children.append(child_node)
                 node = child_node
 
-        # SIMULATION
-        reward = rollout(state, root_player)
+        # SIMULATION - use smart rollout for better estimates
+        reward = smart_rollout(state, root_player)
 
         # BACKPROPAGATION
         while node is not None:
@@ -471,3 +913,220 @@ def get_mcts_win_rates(state, n_iter=400):
                     player2_rates[child.move] = 50.0
 
     return player1_rates, player2_rates, (overall_p1, overall_p2)
+
+
+def mcts_search_optimized(root_state, n_iter=400, tree_manager=None, 
+                          use_adaptive_iterations=True, opponent_last_move=None,
+                          use_fast_rollout=True):
+    """
+    Ultra-optimized MCTS search for AI v AI with maximum performance.
+    
+    Optimizations:
+    1. Tree Reuse: Reuses subtree from opponent's move
+    2. Adaptive Iterations: Reduces iterations for simple positions
+    3. Forced Move Detection: Instantly returns winning moves
+    4. Fast Rollout: Uses raw board operations without state objects
+    5. Minimal Cloning: Only clones when absolutely necessary
+    
+    Arguments:
+        root_state: The current game state from which we search.
+        n_iter: Base number of MCTS iterations.
+        tree_manager: MCTSTreeManager instance for tree reuse (optional).
+        use_adaptive_iterations: If True, adjust iterations based on position.
+        opponent_last_move: The move opponent just made (for tree reuse).
+        use_fast_rollout: If True, use ultra-fast random rollout (faster but less accurate).
+    
+    Returns:
+        The column index of the suggested move, or None if no legal move.
+    """
+    if root_state.is_terminal():
+        return None
+    
+    root_player = root_state.current_player
+    root_board = root_state.board
+    
+    # Check for forced moves first (immediate win or must-block)
+    forced_move, is_winning = detect_forced_move(root_state)
+    if is_winning and forced_move is not None:
+        if tree_manager:
+            tree_manager.clear()
+        return forced_move
+    
+    # Adjust iterations based on position complexity
+    actual_iterations = n_iter
+    if use_adaptive_iterations:
+        multiplier = estimate_position_complexity(root_state)
+        actual_iterations = max(40, int(n_iter * multiplier))
+    
+    # Try to reuse tree from previous search
+    root_node = None
+    if tree_manager and opponent_last_move is not None:
+        root_node = tree_manager.get_reusable_root(opponent_last_move)
+        if root_node is not None:
+            root_node.state = root_state.clone()
+            actual_iterations = max(40, int(actual_iterations * 0.6))
+    
+    if root_node is None:
+        root_node = MCTSNode(root_state.clone())
+    
+    # Pre-compute for the loop
+    cols = len(root_board[0])
+    
+    # Run MCTS iterations with minimal object creation
+    for _ in range(actual_iterations):
+        node = root_node
+        
+        # Use list to track moves made (for reconstruction) instead of cloning
+        moves_made = []
+        current_player = root_player
+        
+        # SELECTION - traverse tree using move list
+        while node.children and node.is_fully_expanded():
+            if node.state.is_terminal():
+                break
+            node = node.best_child()
+            if node.move is not None:
+                moves_made.append(node.move)
+                current_player = PLAYER1 if current_player == PLAYER2 else PLAYER2
+        
+        # Create simulation board by replaying moves (cheaper than cloning each iteration)
+        sim_board = fast_copy_board(root_board)
+        sim_player = root_player
+        for m in moves_made:
+            fast_make_move(sim_board, m, sim_player)
+            sim_player = PLAYER1 if sim_player == PLAYER2 else PLAYER2
+        
+        # EXPANSION
+        if not node.state.is_terminal():
+            legal_moves = fast_get_legal_moves(sim_board)
+            existing_moves = {child.move for child in node.children}
+            untried_moves = [m for m in legal_moves if m not in existing_moves]
+            
+            if untried_moves:
+                move = random.choice(untried_moves)
+                row = fast_make_move(sim_board, move, sim_player)
+                sim_player = PLAYER1 if sim_player == PLAYER2 else PLAYER2
+                
+                # Create child node (need state object for tree structure)
+                child_state = Connect4State(sim_board, sim_player)
+                child_node = MCTSNode(child_state, parent=node, move=move)
+                node.children.append(child_node)
+                node = child_node
+        
+        # SIMULATION - use fast rollout on raw board
+        if use_fast_rollout:
+            reward = fast_rollout(sim_board, sim_player, root_player)
+        else:
+            reward = fast_smart_rollout(sim_board, sim_player, root_player)
+        
+        # BACKPROPAGATION
+        while node is not None:
+            node.visits += 1
+            node.wins += reward
+            node = node.parent
+    
+    # Select best move
+    best_child = root_node.most_visited_child()
+    if best_child is None:
+        return None
+    
+    selected_move = best_child.move
+    
+    if tree_manager:
+        tree_manager.store_root(root_node, selected_move)
+    
+    return selected_move
+
+
+def mcts_search_optimized_with_stats(root_state, n_iter=400, tree_manager=None,
+                                      use_adaptive_iterations=True, opponent_last_move=None,
+                                      use_fast_rollout=True):
+    """
+    Ultra-optimized MCTS search that also returns statistics for debug panel.
+    
+    Same optimizations as mcts_search_optimized plus returns root_node for stats.
+    
+    Returns:
+        Tuple (root_node, root_player, actual_iterations) where:
+        - root_node: The MCTSNode root containing all children statistics
+        - root_player: The player who was about to move
+        - actual_iterations: Number of iterations actually performed
+        Returns (None, None, 0) if game is terminal.
+    """
+    if root_state.is_terminal():
+        return None, None, 0
+    
+    root_player = root_state.current_player
+    root_board = root_state.board
+    
+    # Check for forced winning move
+    forced_move, is_winning = detect_forced_move(root_state)
+    
+    # Adjust iterations based on position complexity
+    actual_iterations = n_iter
+    if use_adaptive_iterations:
+        multiplier = estimate_position_complexity(root_state)
+        actual_iterations = max(40, int(n_iter * multiplier))
+    
+    # Try to reuse tree from previous search
+    root_node = None
+    if tree_manager and opponent_last_move is not None:
+        root_node = tree_manager.get_reusable_root(opponent_last_move)
+        if root_node is not None:
+            root_node.state = root_state.clone()
+            actual_iterations = max(40, int(actual_iterations * 0.6))
+    
+    if root_node is None:
+        root_node = MCTSNode(root_state.clone())
+    
+    # Run MCTS iterations with minimal object creation
+    for _ in range(actual_iterations):
+        node = root_node
+        moves_made = []
+        current_player = root_player
+        
+        # SELECTION
+        while node.children and node.is_fully_expanded():
+            if node.state.is_terminal():
+                break
+            node = node.best_child()
+            if node.move is not None:
+                moves_made.append(node.move)
+                current_player = PLAYER1 if current_player == PLAYER2 else PLAYER2
+        
+        # Create simulation board
+        sim_board = fast_copy_board(root_board)
+        sim_player = root_player
+        for m in moves_made:
+            fast_make_move(sim_board, m, sim_player)
+            sim_player = PLAYER1 if sim_player == PLAYER2 else PLAYER2
+        
+        # EXPANSION
+        if not node.state.is_terminal():
+            legal_moves = fast_get_legal_moves(sim_board)
+            existing_moves = {child.move for child in node.children}
+            untried_moves = [m for m in legal_moves if m not in existing_moves]
+            
+            if untried_moves:
+                move = random.choice(untried_moves)
+                row = fast_make_move(sim_board, move, sim_player)
+                sim_player = PLAYER1 if sim_player == PLAYER2 else PLAYER2
+                
+                child_state = Connect4State(sim_board, sim_player)
+                child_node = MCTSNode(child_state, parent=node, move=move)
+                node.children.append(child_node)
+                node = child_node
+        
+        # SIMULATION
+        if use_fast_rollout:
+            reward = fast_rollout(sim_board, sim_player, root_player)
+        else:
+            reward = fast_smart_rollout(sim_board, sim_player, root_player)
+        
+        # BACKPROPAGATION
+        while node is not None:
+            node.visits += 1
+            node.wins += reward
+            node = node.parent
+    
+    return root_node, root_player, actual_iterations
