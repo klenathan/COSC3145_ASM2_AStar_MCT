@@ -21,6 +21,8 @@ COLOR_START = (0, 200, 0)
 COLOR_GOAL = (200, 0, 0)
 COLOR_PATH = (0, 255, 0)  # Green path color
 COLOR_CLOSED = (120, 0, 120)
+COLOR_OPEN = (255, 165, 0)   # Orange for frontier
+COLOR_CURRENT = (255, 255, 255) # White for current node
 COLOR_TEXT = (230, 230, 230)
 
 # Default start and goal positions (proportional to new grid size)
@@ -35,14 +37,14 @@ TERRAIN_WALL = "wall"
 
 # Terrain movement costs
 COST_GRASS = 1.0
-COST_WATER = 3.0
-COST_MUD = 5.0
+COST_WATER = 5.0
+COST_MUD = 3.0
 COST_WALL = float('inf')
 
-# Terrain color definitions (RGB)
-COLOR_GRASS = (50, 150, 50)      # Green for grass
-COLOR_WATER = (50, 100, 200)     # Blue for water
-COLOR_MUD = (139, 90, 43)        # Brown for mud
+# Terrain color definitions (RGB) - Enhanced for better visual appeal
+COLOR_GRASS = (60, 170, 60)       # Brighter green for grass
+COLOR_WATER = (45, 120, 220)      # More vibrant blue for water
+COLOR_MUD = (150, 100, 50)        # Warmer brown for mud
 # COLOR_WALL already defined above
 
 # Terrain cost mapping
@@ -99,7 +101,7 @@ MUTED = (180, 188, 196)  # hint text
 TARGET_COLOR = (250, 170, 90)  # indicator for the movement target
 
 # Frog setup
-FROG_RADIUS = 16          # draw size and collision size for the frog
+FROG_RADIUS = 12          # draw size and collision size for the frog
 FROG_SPEED = 200.0       # top speed for the frog in pixels per second
 HURT_INVULN = 1.0         # seconds of temporary invulnerability after damage
 SPEED_CLAMP = 2000.0

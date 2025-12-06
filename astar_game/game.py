@@ -50,6 +50,14 @@ class Game:
         self.terrain = generate_perlin_terrain(self.start, self.goal)
         self.current_path = None  # list of cells from start to goal
         self.current_closed = set()  # set of visited cells
+        self.current_open = set() # set of frontier cells
+        self.current_node = None # node currently being processed
+        
+        # Visualization state
+        self.is_visualizing = False
+        self.astar_generator = None
+        self.visualization_steps_per_frame = 1 # Speed of visualization
+        self.visualization_target = None # Track the actual target of current visualization
         
         # Terrain placement state
         self.current_terrain = TERRAIN_GRASS  # Default to grass
@@ -71,9 +79,19 @@ class Game:
         self.speed_slider = Slider(
             slider_x, slider_y, slider_width,
             min_value=50.0,
-            max_value=800.0,
+            max_value=400.0,
             initial_value=FROG_SPEED,
             label="Frog Speed"
+        )
+        
+        # Create visualization speed slider
+        viz_slider_y = slider_y - 40
+        self.viz_speed_slider = Slider(
+            slider_x, viz_slider_y, slider_width,
+            min_value=1.0,
+            max_value=100.0,
+            initial_value=1.0,
+            label="Viz Speed"
         )
 
         # Create diagonal movement toggle button
@@ -83,6 +101,14 @@ class Game:
             toggle_x, toggle_y, 50, 24,
             initial_state=ALLOW_DIAGONAL_NEIGHBORS,
             label="Diagonal Movement"
+        )
+        
+        # Create A* overlay toggle button
+        overlay_toggle_y = toggle_y - 40
+        self.overlay_toggle = ToggleButton(
+            toggle_x, overlay_toggle_y, 50, 24,
+            initial_state=True,  # Show overlay by default
+            label="Show A* Overlay"
         )
 
         self.running = True
@@ -94,6 +120,11 @@ class Game:
         """
         self.current_path = None
         self.current_closed = set()
+        self.current_open = set()
+        self.current_node = None
+        self.is_visualizing = False
+        self.astar_generator = None
+        self.visualization_target = None
 
     def handle_events(self):
         """Handle pygame events."""
@@ -121,13 +152,25 @@ class Game:
                 elif event.key == pygame.K_SPACE:
                     # Get frog's current grid cell
                     frog_cell = self.frog.get_cell()
-                    # Run A* from frog's position to goal
-                    self.current_path, self.current_closed = run_astar(
-                        frog_cell, self.goal, self.terrain, self.allow_diagonal_neighbors
-                    )
-                    # Set the path on the frog so it moves along the calculated path
-                    if self.current_path is not None:
-                        self.frog.set_path(self.current_path)
+                    
+                    if not self.is_visualizing:
+                        # Start visualization
+                        from astar_game.astar import run_astar_step
+                        self.astar_generator = run_astar_step(
+                            frog_cell, self.goal, self.terrain, self.allow_diagonal_neighbors
+                        )
+                        self.is_visualizing = True
+                        self.visualization_target = self.goal  # Track target
+                        self.current_path = None
+                        self.current_closed = set()
+                        self.current_open = set()
+                        self.current_node = None
+                    else:
+                        # If already visualizing, cancel it (optional behavior, or maybe speed up?)
+                        # For now, let's just toggle pause/unpause or restart?
+                        # Let's simple restart for now if space pressed again
+                        pass
+                        
                 # R key regenerates terrain using Perlin noise
                 elif event.key == pygame.K_r:
                     self.terrain = generate_perlin_terrain(self.start, self.goal)
@@ -135,10 +178,15 @@ class Game:
                     self.frog = Frog(DEFAULT_START)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                # Check if slider was clicked first
+                # Check if sliders were clicked first
                 if self.speed_slider.handle_event(event):
                     # Slider handled the event, update frog speed
                     self.frog.set_speed(self.speed_slider.value)
+                    continue
+                
+                if self.viz_speed_slider.handle_event(event):
+                    # Update visualization speed
+                    self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
                     continue
                 
                 # Check if diagonal toggle was clicked
@@ -147,6 +195,11 @@ class Game:
                     self.allow_diagonal_neighbors = self.diagonal_toggle.state
                     # Reset search so user can see the effect
                     self.reset_search()
+                    continue
+                
+                # Check if overlay toggle was clicked
+                if self.overlay_toggle.handle_event(event):
+                    # No need to reset search, just toggle visibility
                     continue
 
                 cell = cell_from_mouse(pygame.mouse.get_pos())
@@ -165,29 +218,31 @@ class Game:
                         # Get frog's current grid cell
                         frog_cell = self.frog.get_cell()
                         target_cell = cell
+                        
+                        # Update the goal position to the clicked cell
+                        self.goal = target_cell
 
-                        # Run A* from frog's position to target
-                        path, closed_set = run_astar(
-                            frog_cell, target_cell, self.terrain, self.allow_diagonal_neighbors)
-
-                        if path is not None:
-                            # Set the path on the frog
-                            self.frog.set_path(path)
-                            # Store path and closed set for rendering
-                            self.current_path = path
-                            self.current_closed = closed_set
-                        else:
-                            # No path found
-                            self.current_path = None
-                            self.current_closed = closed_set
+                        # Start visualization to new target
+                        from astar_game.astar import run_astar_step
+                        self.astar_generator = run_astar_step(
+                            frog_cell, target_cell, self.terrain, self.allow_diagonal_neighbors
+                        )
+                        self.is_visualizing = True
+                        self.visualization_target = target_cell  # Track the clicked target
+                        self.current_path = None
+                        self.current_closed = set()
+                        self.current_open = set()
+                        self.current_node = None
+                        
                     # Middle click sets goal (legacy, kept for compatibility)
                     elif event.button == 2:
                         self.goal = cell
                         self.reset_search()
 
             elif event.type == pygame.MOUSEBUTTONUP:
-                # Handle slider release
+                # Handle slider releases
                 self.speed_slider.handle_event(event)
+                self.viz_speed_slider.handle_event(event)
                 # Stop continuous terrain placement on left button release
                 if event.button == 1:
                     self.mouse_held = False
@@ -197,6 +252,10 @@ class Game:
                 if self.speed_slider.handle_event(event):
                     # Update frog speed while dragging
                     self.frog.set_speed(self.speed_slider.value)
+                
+                if self.viz_speed_slider.handle_event(event):
+                    # Update visualization speed while dragging
+                    self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
 
     def update(self, dt):
         """Update game state.
@@ -204,11 +263,16 @@ class Game:
         Args:
             dt: Delta time in seconds since last frame
         """
-        # Update slider if dragging (for smooth continuous updates)
+        # Update sliders if dragging (for smooth continuous updates)
         if self.speed_slider.dragging:
             mouse_pos = pygame.mouse.get_pos()
             self.speed_slider.update(mouse_pos)
             self.frog.set_speed(self.speed_slider.value)
+        
+        if self.viz_speed_slider.dragging:
+            mouse_pos = pygame.mouse.get_pos()
+            self.viz_speed_slider.update(mouse_pos)
+            self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
 
         # Handle continuous terrain placement while mouse is held
         if self.mouse_held:
@@ -222,6 +286,35 @@ class Game:
                         self.terrain[cell] = self.current_terrain
                         # Clear previous A* result, as the map changed
                         self.reset_search()
+        
+        # Update visualization
+        if self.is_visualizing and self.astar_generator:
+            # Execute multiple steps per frame to control speed
+            # (Or just 1 for now, depending on desired speed. 
+            #  We can also use a timer to slow it down if it's too fast)
+            
+            # Simple speed control: 1 step per frame or more
+            for _ in range(self.visualization_steps_per_frame):
+                try:
+                    state = next(self.astar_generator)
+                    path, open_set, closed_set, current = state
+                    
+                    self.current_path = path
+                    self.current_closed = closed_set
+                    self.current_open = open_set
+                    self.current_node = current
+                    
+                    # Check if reached target (path found)
+                    if current == self.visualization_target:
+                         self.is_visualizing = False
+                         if path:
+                             self.frog.set_path(path)
+                         break
+                         
+                except StopIteration:
+                    self.is_visualizing = False
+                    self.astar_generator = None
+                    break
 
         # Update frog
         self.frog.update(dt)
@@ -236,6 +329,9 @@ class Game:
             self.goal,
             self.current_path,
             self.current_closed,
+            current_open=self.current_open,
+            current_node=self.current_node,
+            show_overlay=self.overlay_toggle.state
         )
         # Draw frog on top of grid
         self.frog.draw(self.screen)
@@ -243,8 +339,14 @@ class Game:
         # Draw speed slider
         self.speed_slider.draw(self.screen, self.font)
         
+        # Draw visualization speed slider
+        self.viz_speed_slider.draw(self.screen, self.font)
+        
         # Draw diagonal movement toggle
         self.diagonal_toggle.draw(self.screen, self.font)
+        
+        # Draw A* overlay toggle
+        self.overlay_toggle.draw(self.screen, self.font)
 
         draw_help_text(self.screen, self.font, self.current_terrain, self.debug_mode)
         

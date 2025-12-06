@@ -46,26 +46,22 @@ def reconstruct_path(came_from, current):
     return path
 
 
-def run_astar(start, goal, terrain, allow_diagonal_neighbors=False):
+def run_astar_step(start, goal, terrain, allow_diagonal_neighbors=False):
     """
-    Execute the A* algorithm on the current grid with terrain costs.
+    Generator that yields the state of the A* algorithm at each step.
     
-    Args:
-        start: Tuple of (row, col) representing the start cell
-        goal: Tuple of (row, col) representing the goal cell
-        terrain: Dictionary mapping (row, col) -> terrain_type
-        allow_diagonal_neighbors: Boolean flag to enable/disable diagonal movement
-        
-    Returns:
-        Tuple of (path, closed_set) where:
-        - path: List of (row, col) tuples from start to goal, or None if no path exists
-        - closed_set: Set of (row, col) tuples representing visited cells
+    Yields:
+        Tuple of (current_path, open_set, closed_set, current_node)
+        - current_path: Path from start to current node (or None)
+        - open_set: Set of cells in the frontier
+        - closed_set: Set of visited cells
+        - current_node: The node currently being processed
     """
     # If start or goal is a wall, we cannot find a path
     if start in terrain and terrain[start] == TERRAIN_WALL:
-        return None, set()
+        return
     if goal in terrain and terrain[goal] == TERRAIN_WALL:
-        return None, set()
+        return
 
     # Priority queue (min heap) of (f_score, cell)
     open_heap = []
@@ -87,13 +83,18 @@ def run_astar(start, goal, terrain, allow_diagonal_neighbors=False):
         current_f, current = heapq.heappop(open_heap)
         open_set.remove(current)
 
-        # If we reached the goal, reconstruct the path and return results
-        if current == goal:
-            path = reconstruct_path(came_from, current)
-            return path, closed_set
-
-        # Mark as visited
+        # Mark as visited (temporarily add to closed set for visualization before expansion)
         closed_set.add(current)
+        
+        # Build current path for visualization
+        path_so_far = reconstruct_path(came_from, current)
+        
+        # Yield current state
+        yield path_so_far, open_set.copy(), closed_set.copy(), current
+
+        # If we reached the goal, we are done
+        if current == goal:
+            return
 
         # Check all neighbors
         for neighbor in get_neighbors(current, terrain, allow_diagonal_neighbors):
@@ -130,7 +131,29 @@ def run_astar(start, goal, terrain, allow_diagonal_neighbors=False):
                 if neighbor not in open_set:
                     heapq.heappush(open_heap, (f_score[neighbor], neighbor))
                     open_set.add(neighbor)
+    
+    # Yield final state if no path found
+    yield None, open_set.copy(), closed_set.copy(), None
 
-    # If we finish the loop, there is no path
-    return None, closed_set
+
+def run_astar(start, goal, terrain, allow_diagonal_neighbors=False):
+    """
+    Execute the A* algorithm on the current grid with terrain costs.
+    Now implemented as a wrapper around the generator.
+    """
+    generator = run_astar_step(start, goal, terrain, allow_diagonal_neighbors)
+    
+    last_state = (None, set(), set(), None)
+    try:
+        for state in generator:
+            last_state = state
+            # If we found the goal (current node is goal), break early if we want optimal
+            # But the generator yields until queue empty or goal found inside loop
+            path, _, _, current = state
+            if current == goal:
+                return path, state[2] # Return path and closed set
+    except StopIteration:
+        pass
+        
+    return last_state[0], last_state[2]
 

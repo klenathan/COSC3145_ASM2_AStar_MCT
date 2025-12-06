@@ -19,6 +19,8 @@ from astar_game.config import (
     COLOR_GOAL,
     COLOR_PATH,
     COLOR_CLOSED,
+    COLOR_OPEN,
+    COLOR_CURRENT,
     COLOR_GRASS,
     COLOR_WATER,
     COLOR_MUD,
@@ -29,7 +31,117 @@ from astar_game.config import (
 )
 
 
-def draw_grid(surface, terrain, start, goal, current_path, current_closed):
+def _get_terrain_color(terrain_type):
+    """Get the base color for a terrain type."""
+    if terrain_type == TERRAIN_GRASS:
+        return COLOR_GRASS
+    elif terrain_type == TERRAIN_WATER:
+        return COLOR_WATER
+    elif terrain_type == TERRAIN_MUD:
+        return COLOR_MUD
+    elif terrain_type == TERRAIN_WALL:
+        return COLOR_WALL
+    else:
+        return COLOR_BG
+
+
+def _lerp_color(color1, color2, t):
+    """Linear interpolation between two colors."""
+    return tuple(int(c1 + (c2 - c1) * t) for c1, c2 in zip(color1, color2))
+
+
+def _get_blended_color(terrain, cell, rows, cols):
+    """
+    Get a blended color for a cell based on its neighbors.
+    Creates smooth transitions between different terrain types.
+    
+    Args:
+        terrain: Dictionary mapping (row, col) -> terrain_type
+        cell: Tuple (row, col) for the current cell
+        rows: Total number of rows in grid
+        cols: Total number of columns in grid
+        
+    Returns:
+        RGB color tuple
+    """
+    r, c = cell
+    current_terrain = terrain.get(cell, TERRAIN_GRASS)
+    current_color = _get_terrain_color(current_terrain)
+    
+    # Sample neighbors for blending
+    neighbors = []
+    for dr in [-1, 0, 1]:
+        for dc in [-1, 0, 1]:
+            if dr == 0 and dc == 0:
+                continue
+            nr, nc = r + dr, c + dc
+            if 0 <= nr < rows and 0 <= nc < cols:
+                neighbor_terrain = terrain.get((nr, nc), TERRAIN_GRASS)
+                neighbors.append(neighbor_terrain)
+    
+    # If all neighbors are the same type, no blending needed
+    if all(n == current_terrain for n in neighbors):
+        return current_color
+    
+    # Blend with neighboring colors
+    blend_color = list(current_color)
+    blend_weight = 0.85  # Weight for current cell (higher = less blending)
+    neighbor_weight = (1.0 - blend_weight) / len(neighbors) if neighbors else 0
+    
+    for neighbor_terrain in neighbors:
+        if neighbor_terrain != current_terrain:
+            neighbor_color = _get_terrain_color(neighbor_terrain)
+            for i in range(3):
+                blend_color[i] += neighbor_color[i] * neighbor_weight
+    
+    # Normalize
+    blend_color = tuple(int(c * blend_weight + c * (1 - blend_weight)) for c in current_color)
+    
+    # Better blending: weighted average
+    final_color = [current_color[i] * blend_weight for i in range(3)]
+    for neighbor_terrain in neighbors:
+        neighbor_color = _get_terrain_color(neighbor_terrain)
+        for i in range(3):
+            final_color[i] += neighbor_color[i] * neighbor_weight
+    
+    return tuple(int(c) for c in final_color)
+
+
+def _add_texture_variation(color, cell, variation_amount=0.08):
+    """
+    Add subtle texture variation to a color based on cell position.
+    Uses cell coordinates as a pseudo-random seed for consistency.
+    
+    Args:
+        color: Base RGB color tuple
+        cell: Tuple (row, col) for deterministic variation
+        variation_amount: How much to vary (0.0 to 1.0)
+        
+    Returns:
+        Modified RGB color tuple
+    """
+    r, c = cell
+    # Use cell coordinates to generate consistent pseudo-random variation
+    seed = (r * 73856093) ^ (c * 19349663)  # Hash function
+    
+    # Generate variation for each color channel
+    variation = []
+    for i in range(3):
+        # Simple pseudo-random based on seed and channel
+        channel_seed = (seed + i * 12345) % 1000
+        noise = (channel_seed / 1000.0) * 2.0 - 1.0  # Range: -1 to 1
+        variation.append(noise * variation_amount)
+    
+    # Apply variation
+    varied_color = tuple(
+        max(0, min(255, int(color[i] * (1.0 + variation[i]))))
+        for i in range(3)
+    )
+    
+    return varied_color
+
+
+def draw_grid(surface, terrain, start, goal, current_path, current_closed, **kwargs):
     """
     Draw the grid cells: terrain, start, goal, closed set, and path.
     The draw order matters so that path and special cells are visible.
@@ -40,11 +152,21 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed):
         start: Tuple of (row, col) representing the start cell
         goal: Tuple of (row, col) representing the goal cell
         current_path: List of (row, col) tuples representing the current path, or None
+        goal: Tuple of (row, col) representing the goal cell
+        current_path: List of (row, col) tuples representing the current path, or None
         current_closed: Set of (row, col) tuples representing visited cells
+        current_open: Set of (row, col) tuples representing frontier cells (optional)
+        current_node: Tuple of (row, col) representing the current processing node (optional)
+        show_overlay: Boolean to show/hide A* traversal overlay (optional, default True)
     """
     from astar_game.config import ROWS, COLS
     
-    # First draw terrain base colors
+    # Default optional arguments if not provided by caller (compatibility)
+    current_open = kwargs.get('current_open', set())
+    current_node = kwargs.get('current_node', None)
+    show_overlay = kwargs.get('show_overlay', True)  # Default to showing overlay
+    
+    # First draw terrain base colors with blending and texture
     for r in range(ROWS):
         for c in range(COLS):
             x = c * CELL_SIZE
@@ -55,38 +177,40 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed):
             cell = (r, c)
             terrain_type = terrain.get(cell, TERRAIN_GRASS)
             
-            # Choose color based on terrain type
-            if terrain_type == TERRAIN_GRASS:
-                color = COLOR_GRASS
-            elif terrain_type == TERRAIN_WATER:
-                color = COLOR_WATER
-            elif terrain_type == TERRAIN_MUD:
-                color = COLOR_MUD
-            elif terrain_type == TERRAIN_WALL:
-                color = COLOR_WALL
-            else:
-                color = COLOR_BG  # Fallback
+            # Get blended color based on neighbors
+            color = _get_blended_color(terrain, cell, ROWS, COLS)
+            
+            # Add subtle texture variation
+            color = _add_texture_variation(color, cell, variation_amount=0.12)
 
-            # Fill the cell with the terrain color
-            # Use anti-aliased rounded rectangle for smoother edges if available
-            if HAS_GFXDRAW and terrain_type != TERRAIN_GRASS:
-                # Draw a slightly rounded rectangle for smoother appearance
-                # Create a surface for anti-aliasing effect
-                cell_surface = pygame.Surface((CELL_SIZE, CELL_SIZE), pygame.SRCALPHA)
-                # Draw filled rounded rectangle
-                pygame.draw.rect(cell_surface, color, (0, 0, CELL_SIZE, CELL_SIZE), border_radius=2)
-                surface.blit(cell_surface, (x, y))
-            else:
-                # Standard rectangle drawing
-                pygame.draw.rect(surface, color, rect)
+            # Fill the cell with the blended and textured color
+            pygame.draw.rect(surface, color, rect)
 
-    # Then show visited cells from the last A* run
-    for r, c in current_closed:
-        x = c * CELL_SIZE
-        y = r * CELL_SIZE
-        rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
-        # Color for visited cells
-        pygame.draw.rect(surface, COLOR_CLOSED, rect)
+    # Only show A* visualization if overlay is enabled
+    if show_overlay:
+        # Then show visited cells from the last A* run
+        for r, c in current_closed:
+            x = c * CELL_SIZE
+            y = r * CELL_SIZE
+            rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+            # Color for visited cells
+            pygame.draw.rect(surface, COLOR_CLOSED, rect)
+
+        # Draw frontier (open set)
+        if current_open:
+            for r, c in current_open:
+                x = c * CELL_SIZE
+                y = r * CELL_SIZE
+                rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+                pygame.draw.rect(surface, COLOR_OPEN, rect)
+                
+        # Draw current node being processed
+        if current_node:
+            r, c = current_node
+            x = c * CELL_SIZE
+            y = r * CELL_SIZE
+            rect = pygame.Rect(x, y, CELL_SIZE, CELL_SIZE)
+            pygame.draw.rect(surface, COLOR_CURRENT, rect)
 
     # Then draw the path if it exists
     if current_path is not None:
@@ -104,13 +228,20 @@ def draw_grid(surface, terrain, start, goal, current_path, current_closed):
     pygame.draw.rect(surface, COLOR_START, start_rect)
     pygame.draw.rect(surface, COLOR_GOAL, goal_rect)
 
-    # Draw grid lines last so they frame everything
+    # Draw subtle grid lines with transparency
+    # Create a semi-transparent surface for grid lines
+    grid_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    grid_alpha = 30  # Low alpha for subtle grid lines (0-255)
+    grid_color = (*COLOR_GRID, grid_alpha)
+    
     for c in range(COLS + 1):
         x = c * CELL_SIZE
-        pygame.draw.line(surface, COLOR_GRID, (x, 0), (x, WINDOW_HEIGHT))
+        pygame.draw.line(grid_surface, grid_color, (x, 0), (x, WINDOW_HEIGHT), 1)
     for r in range(ROWS + 1):
         y = r * CELL_SIZE
-        pygame.draw.line(surface, COLOR_GRID, (0, y), (WINDOW_WIDTH, y))
+        pygame.draw.line(grid_surface, grid_color, (0, y), (WINDOW_WIDTH, y), 1)
+    
+    surface.blit(grid_surface, (0, 0))
 
 
 def draw_help_text(surface, font, current_terrain=None, debug_mode=False):

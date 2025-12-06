@@ -33,10 +33,10 @@ def generate_perlin_terrain(start, goal, max_attempts=10, scale=0.1, octaves=4):
     # Deep water: very low
     THRES_WATER = -0.25
     # Mud: transition from water to grass
-    THRES_MUD = -0.05
+    THRES_MUD = -0.15
     # Grass: main ground
     # Walls: high peaks (lowered to increase wall density)
-    THRES_WALL = 0.08 
+    THRES_WALL = 0.1 
     
     for attempt in range(max_attempts):
         # New seed for each attempt
