@@ -51,7 +51,7 @@ class InfoPanel:
         self.toggle_button_hovered = False
         
         # Store references to UI components (will be set externally)
-        self.speed_slider = None
+
         self.viz_speed_slider = None
         self.diagonal_toggle = None
         self.overlay_toggle = None
@@ -60,17 +60,17 @@ class InfoPanel:
         """Toggle panel visibility."""
         self.visible = not self.visible
 
-    def set_ui_components(self, speed_slider, viz_speed_slider, diagonal_toggle, overlay_toggle):
+    def set_ui_components(self, viz_speed_slider, diagonal_toggle, overlay_toggle):
         """
         Set references to UI components that will be embedded in the panel.
         
         Args:
-            speed_slider: Slider for frog speed
+
             viz_speed_slider: Slider for visualization speed
             diagonal_toggle: Toggle for diagonal movement
             overlay_toggle: Toggle for A* overlay visibility
         """
-        self.speed_slider = speed_slider
+
         self.viz_speed_slider = viz_speed_slider
         self.diagonal_toggle = diagonal_toggle
         self.overlay_toggle = overlay_toggle
@@ -89,7 +89,10 @@ class InfoPanel:
             return False
         
         # Check if event is within panel bounds first
-        if event.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEMOTION):
+        # We only restrict MOUSEBUTTONDOWN to the panel area.
+        # We MUST allow MOUSEBUTTONUP and MOUSEMOTION to pass through so that
+        # dragging operations (which might go outside the panel) can be handled correctly.
+        if event.type == pygame.MOUSEBUTTONDOWN:
             mouse_x, mouse_y = event.pos
             # Calculate panel height dynamically
             panel_height = self._calculate_panel_height()
@@ -100,8 +103,7 @@ class InfoPanel:
         # Only handle UI component events if settings are expanded
         if self.settings_expanded:
             # Delegate to UI components
-            if self.speed_slider and self.speed_slider.handle_event(event):
-                return True
+
             if self.viz_speed_slider and self.viz_speed_slider.handle_event(event):
                 return True
             if self.diagonal_toggle and self.diagonal_toggle.handle_event(event):
@@ -121,8 +123,7 @@ class InfoPanel:
         if not self.visible:
             return
         
-        if self.speed_slider and self.speed_slider.dragging:
-            self.speed_slider.update(mouse_pos)
+
         if self.viz_speed_slider and self.viz_speed_slider.dragging:
             self.viz_speed_slider.update(mouse_pos)
 
@@ -136,7 +137,7 @@ class InfoPanel:
         lines = 20  # Approximate number of text lines (increased for terrain breakdown)
         
         # Add space for sliders (2 sliders)
-        slider_space = 80 * 2  # Each slider needs about 80px
+        slider_space = 80 * 1  # Each slider needs about 80px
         
         # Add space for toggles (2 toggles)
         toggle_space = 50 * 2  # Each toggle needs about 50px
@@ -330,21 +331,7 @@ class InfoPanel:
                 
                 y_offset += 60
             
-            if self.speed_slider:
-                slider_x = self.x + self.padding + 5
-                slider_y = self.y + y_offset
-                
-                original_x = self.speed_slider.x
-                original_y = self.speed_slider.y
-                self.speed_slider.x = slider_x
-                self.speed_slider.y = slider_y
-                
-                self.speed_slider.draw(surface, font)
-                
-                self.speed_slider.x = slider_x
-                self.speed_slider.y = slider_y
-                
-                y_offset += 60
+
             
             if self.diagonal_toggle:
                 toggle_x = self.x + self.padding + 5

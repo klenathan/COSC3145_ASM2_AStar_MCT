@@ -58,7 +58,7 @@ class Game:
         # Visualization state
         self.is_visualizing = False
         self.astar_generator = None
-        self.visualization_steps_per_frame = 80 # Speed of visualization
+        self.visualization_steps_per_frame = 1 # Speed of visualization
         self.visualization_target = None # Track the actual target of current visualization
         
         # Terrain placement state
@@ -75,20 +75,11 @@ class Game:
         self.frog = Frog(DEFAULT_START)
 
         # Create UI controls (will be embedded in info panel)
-        # Position doesn't matter initially, panel will reposition them
-        self.speed_slider = Slider(
-            0, 0, 250,
-            min_value=50.0,
-            max_value=400.0,
-            initial_value=FROG_SPEED,
-            label="Frog Speed"
-        )
-        
         self.viz_speed_slider = Slider(
             0, 0, 250,
             min_value=1.0,
             max_value=100.0,
-            initial_value=80.0,
+            initial_value=1.0,
             label="Viz Speed"
         )
 
@@ -107,7 +98,7 @@ class Game:
         # Create info panel overlay and attach UI components
         self.info_panel = InfoPanel(width=320, visible=True)
         self.info_panel.set_ui_components(
-            self.speed_slider,
+
             self.viz_speed_slider,
             self.diagonal_toggle,
             self.overlay_toggle
@@ -187,8 +178,8 @@ class Game:
                 # Check if info panel handled the event first
                 if self.info_panel.handle_event(event):
                     # Panel handled the event, update game state accordingly
-                    self.frog.set_speed(self.speed_slider.value)
-                    self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
+
+                    self.visualization_steps_per_frame = max(1, int(self.viz_speed_slider.value))
                     self.allow_diagonal_neighbors = self.diagonal_toggle.state
                     # Reset search if diagonal setting changed
                     if event.type == pygame.MOUSEBUTTONDOWN:
@@ -247,7 +238,7 @@ class Game:
                 # Handle panel UI dragging
                 if self.info_panel.handle_event(event):
                     # Update values while dragging
-                    self.frog.set_speed(self.speed_slider.value)
+
                     self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
 
     def update(self, dt):
@@ -261,10 +252,9 @@ class Game:
         self.info_panel.update(mouse_pos)
         
         # Update game state from UI values
-        if self.speed_slider.dragging:
-            self.frog.set_speed(self.speed_slider.value)
+
         if self.viz_speed_slider.dragging:
-            self.visualization_steps_per_frame = int(self.viz_speed_slider.value)
+            self.visualization_steps_per_frame = max(1, int(self.viz_speed_slider.value))
 
         # Handle continuous terrain placement while mouse is held
         if self.mouse_held:
