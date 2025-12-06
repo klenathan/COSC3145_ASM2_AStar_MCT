@@ -31,6 +31,7 @@ class Frog:
         # Path following state
         # List of waypoints in cell coordinates (row, col)
         self.path: list[tuple] = []
+        self.path_index = 0
 
     def set_path(self, path_cells):
         """
@@ -41,10 +42,14 @@ class Frog:
         """
         if path_cells is None or len(path_cells) == 0:
             self.path = []
+            self.path_index = 0
             return
 
         # Store cell coordinates directly
         self.path = list(path_cells)
+        # Reset path index. Note: path normally includes the starting cell as index 0.
+        # If we are already at index 0, logic will quickly advance to index 1.
+        self.path_index = 0
 
     def update(self, dt):
         """
@@ -54,30 +59,26 @@ class Frog:
             dt: Delta time in seconds since last frame
         """
         # If no path, stop
-        if not self.path or len(self.path) < 2:
-            # Apply braking force to slow down
-            self.vel = integrate_velocity(
-                self.vel, -self.vel * 5.0, dt, self.speed)
+        if not self.path:
+            self.vel = V2()
             return
-
-        # Check if we've reached the end of the path
-        # Convert last cell to pixel center for distance calculation
-        end_cell = self.path[-1]
-        end_pixel = V2(*cell_to_pixel_center(end_cell))
-        distance_to_end = (end_pixel - self.pos).length()
-        # if distance_to_end < ARRIVE_STOP_RADIUS:
-        #     # Reached the end, stop
-        #     self.vel = integrate_velocity(
-        #         self.vel, -self.vel * 5.0, dt, self.speed)
-        #     return
-
-        # Use path following behavior to follow the path smoothly
-        # Pass cell coordinates to follow_path
-        steering_force = follow_path(
-            self.pos, self.vel, self.path, PATH_LOOKAHEAD, self.speed)
-
-        # Apply steering force to velocity
-        self.vel = integrate_velocity(self.vel, steering_force, dt, self.speed)
+            
+        # Use strict path following
+        from astar_game.steering import follow_path_strict
+        self.vel, self.path_index = follow_path_strict(
+            self.pos, self.path, self.path_index, self.speed
+        )
+        
+        # Check if we finished the path
+        if self.path_index >= len(self.path):
+            self.vel = V2()
+            # Optionally snap to exact end position
+            if len(self.path) > 0:
+                end_cell = self.path[-1]
+                end_pos = V2(*cell_to_pixel_center(end_cell))
+                # Only snap if very close, to avoid teleporting if something weird happened
+                if (end_pos - self.pos).length() < 10.0:
+                    self.pos = end_pos
 
         # Update position based on velocity
         self.pos += self.vel * dt

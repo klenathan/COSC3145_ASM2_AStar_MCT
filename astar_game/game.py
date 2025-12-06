@@ -21,7 +21,7 @@ from astar_game.config import (
     COLS,
     ALLOW_DIAGONAL_NEIGHBORS,
 )
-from astar_game.grid import cell_from_mouse, generate_random_terrain, generate_clustered_terrain
+from astar_game.grid import cell_from_mouse, generate_random_terrain, generate_clustered_terrain, generate_perlin_terrain
 from astar_game.astar import run_astar
 from astar_game.renderer import draw_grid, draw_help_text
 from astar_game.frog import Frog
@@ -46,8 +46,8 @@ class Game:
         # Game state
         self.start = DEFAULT_START
         self.goal = DEFAULT_GOAL
-        # Use clustered terrain generation for more realistic terrain
-        self.terrain = generate_clustered_terrain(self.start, self.goal)
+        # Use Perlin terrain generation for more realistic terrain
+        self.terrain = generate_perlin_terrain(self.start, self.goal)
         self.current_path = None  # list of cells from start to goal
         self.current_closed = set()  # set of visited cells
         
@@ -128,12 +128,10 @@ class Game:
                     # Set the path on the frog so it moves along the calculated path
                     if self.current_path is not None:
                         self.frog.set_path(self.current_path)
-                # R key regenerates terrain using clustered generation
+                # R key regenerates terrain using Perlin noise
                 elif event.key == pygame.K_r:
-                    # Regenerate terrain with clustered method
-                    self.terrain = generate_clustered_terrain(self.start, self.goal)
+                    self.terrain = generate_perlin_terrain(self.start, self.goal)
                     self.reset_search()
-                    # Reset frog to start position
                     self.frog = Frog(DEFAULT_START)
 
             if event.type == pygame.MOUSEBUTTONDOWN:

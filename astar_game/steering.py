@@ -309,6 +309,52 @@ def follow_path(pos: V2, vel: V2, path: list[tuple], lookahead=PATH_LOOKAHEAD, m
     else:
         return arrive(pos, vel, lookahead_point, target_speed)
 
+
+def follow_path_strict(pos: V2, path: list[tuple], current_index: int, speed: float) -> tuple[V2, int]:
+    """
+    Follow a path strictly by moving directly from waypoint to waypoint.
+    Returns the desired velocity vector and the updated path index.
+    
+    Args:
+        pos: Current position in pixel coordinates (V2)
+        path: List of (row, col) tuples representing the path
+        current_index: Index of the current target waypoint in the path
+        speed: Movement speed
+        
+    Returns:
+        tuple[V2, int]: (velocity, new_index)
+    """
+    if not path or current_index >= len(path):
+        return V2(), current_index
+        
+    # Get target position in pixels
+    target_cell = path[current_index]
+    target_pos = V2(*cell_to_pixel_center(target_cell))
+    
+    # Vector to target
+    to_target = target_pos - pos
+    dist = to_target.length()
+    
+    # Threshold to consider waypoint reached
+    # If we are very close, SNAP to the point track the next one
+    WAYPOINT_REACHED_THRESHOLD = 5.0
+    
+    if dist < WAYPOINT_REACHED_THRESHOLD:
+        # Reached current waypoint, advance index
+        new_index = current_index + 1
+        
+        # If we reached the end of the path
+        if new_index >= len(path):
+            return V2(), new_index
+            
+        # Standard recursion to immediately target the next point in this same frame
+        # (This prevents a frame of zero velocity when hitting a waypoint)
+        return follow_path_strict(pos, path, new_index, speed)
+        
+    # Move directly towards target
+    velocity = to_target.normalize() * speed
+    return velocity, current_index
+
 # Note: seek() is already defined above, this duplicate definition is removed
 # ---------------- Obstacle avoidance blend ----------------
 
