@@ -85,7 +85,7 @@ def _get_blended_color(terrain, cell, rows, cols):
     
     # Blend with neighboring colors
     blend_color = list(current_color)
-    blend_weight = 0.85  # Weight for current cell (higher = less blending)
+    blend_weight = 0.95  # Weight for current cell (higher = less blending)
     neighbor_weight = (1.0 - blend_weight) / len(neighbors) if neighbors else 0
     
     for neighbor_terrain in neighbors:
