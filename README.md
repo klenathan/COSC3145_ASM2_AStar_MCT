@@ -1,78 +1,115 @@
-# A* Pathfinding Visualization
+# Game AI Design - Assignment 2
 
-An interactive pygame-based visualization tool for the A* pathfinding algorithm.
+This project contains two AI-powered game applications demonstrating **A\* Pathfinding** and **Monte Carlo Tree Search (MCTS)** algorithms.
 
-## Features
+## Requirements
 
-- Interactive grid-based pathfinding visualization
-- Click to place/remove walls
-- Set custom start and goal positions
-- Visual feedback showing the A* algorithm's search process
-- Clean, modular codebase following industry standards
+```bash
+pip install pygame
+```
 
-## Installation
-
-This project uses `uv` for dependency management. Install dependencies with:
-
+Or using `uv`:
 ```bash
 uv sync
 ```
 
-Or if using pip:
+---
+
+## 1. A* Pathfinding Visualization
+
+An interactive visualization of the A\* pathfinding algorithm with terrain costs, diagonal movement, and a frog character that follows the computed path.
+
+### Run
 
 ```bash
-pip install -e .
+python astar_game.py
 ```
 
-## Running the Game
+### Features
 
-Run the game with:
+- **Procedural Terrain Generation**: Perlin noise-based terrain with grass, water, mud, and walls
+- **Terrain Costs**: Different terrains have different traversal costs
+- **Diagonal Movement**: Toggle diagonal pathfinding for more natural movement
+- **Real-time Visualization**: Watch A\* explore the grid step-by-step
+- **Frog Character**: Animated frog follows the computed path using steering behaviors
+
+### Controls
+
+| Input | Action |
+|-------|--------|
+| **Left Click** | Place selected terrain type |
+| **Right Click** | Set goal and run pathfinding from frog to clicked position |
+| **Middle Click** | Set goal position (legacy) |
+| **Space** | Run A\* from frog's current position to goal |
+| **R** | Regenerate terrain |
+| **D** | Toggle debug mode |
+| **I** | Toggle info panel |
+| **1-4** | Select terrain type (1=Grass, 2=Water, 3=Mud, 4=Wall) |
+| **Escape** | Quit |
+
+### Info Panel
+
+The info panel (toggle with **I**) displays:
+- Visualization speed slider
+- Diagonal movement toggle
+- A\* overlay visibility toggle
+- Path statistics (cost breakdown by terrain type)
+
+---
+
+## 2. Connect 4 with MCTS AI
+
+A Connect 4 game featuring an AI opponent powered by Monte Carlo Tree Search with smart rollouts and win-rate analysis.
+
+### Run
 
 ```bash
-python main.py
+python connect4.py
 ```
 
-Or:
+### Game Modes
 
-```bash
-uv run main.py
-```
+| Mode | Description |
+|------|-------------|
+| **Human vs AI** | Play against the MCTS AI opponent |
+| **AI vs AI** | Watch two MCTS agents compete |
+| **Human vs Human** | Two-player local multiplayer |
+| **Time Attack** | Two players with time banks |
 
-## Controls
+### Controls
 
-- **Left Mouse Button**: Toggle wall on/off on a cell
-- **Right Mouse Button**: Set the start cell
-- **Middle Mouse Button**: Set the goal cell
-- **Space**: Run A* algorithm from start to goal
-- **Escape**: Quit the program
+| Input | Action |
+|-------|--------|
+| **Click Column** | Drop piece in that column |
+| **H** | Get hint from MCTS (Human modes) |
+| **D** | Toggle debug panel with AI statistics |
+| **R** | Restart current game |
+| **T** | Cycle theme |
+| **Escape** | Return to menu |
+
+### MCTS AI Features
+
+- **UCT Selection**: Balances exploration vs exploitation
+- **Smart Rollouts**: Uses heuristics (win/block detection) during simulation
+- **Win Rate Display**: Debug panel shows per-column win probabilities
+- **Tree Persistence**: Reuses search tree in AI vs AI mode for faster decisions
+
+---
 
 ## Project Structure
 
 ```
-asm2/
-├── astar_game/          # Main game package
-│   ├── __init__.py      # Package initialization
-│   ├── config.py        # Configuration constants
-│   ├── grid.py          # Grid utility functions
-│   ├── astar.py         # A* pathfinding algorithm
-│   ├── renderer.py      # Rendering functions
-│   └── game.py          # Main Game class and loop
-├── main.py              # Application entry point
-├── pyproject.toml       # Project configuration
-└── README.md            # This file
+├── astar_game.py          # A* game entry point
+├── astar_game/            # A* pathfinding module
+│   ├── astar.py           # A* algorithm implementation
+│   ├── frog.py            # Frog character with steering behaviors
+│   ├── renderer.py        # Grid and UI rendering
+│   └── ...
+├── connect4.py            # Connect 4 entry point
+├── connect4/              # Connect 4 module
+│   ├── mcts.py            # MCTS algorithm implementation
+│   ├── state.py           # Game state management
+│   ├── renderer.py        # Board and UI rendering
+│   └── ...
+└── requirements.txt       # Python dependencies
 ```
-
-## Architecture
-
-The codebase is organized into modular components:
-
-- **config.py**: Centralized configuration including grid dimensions, colors, and default values
-- **grid.py**: Utility functions for grid operations (cell conversion, neighbor finding)
-- **astar.py**: Core A* pathfinding algorithm implementation
-- **renderer.py**: All drawing and rendering logic
-- **game.py**: Main Game class that manages state and the game loop
-- **main.py**: Simple entry point that instantiates and runs the game
-
-This structure makes the codebase maintainable, testable, and easy to extend.
-
-
