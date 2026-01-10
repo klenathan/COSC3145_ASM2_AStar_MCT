@@ -232,5 +232,4 @@ class Frog:
         Args:
             speed: New speed in pixels per second
         """
-        self.speed = max(10.0, min(SPEED_CLAMP, speed)
-                         )  # Clamp between 10 and SPEED_CLAMP
+        self.speed = max(10.0, min(SPEED_CLAMP, speed))  # Clamp between 10 and SPEED_CLAMP
